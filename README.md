@@ -2,6 +2,8 @@
 
 Remote MCP server for image generation, built with UV + Python.
 
+> Use the workspace root `.venv` via `UV_PROJECT_ENVIRONMENT=../.venv` when running UV commands from this subproject.
+
 ## Quick start
 
 ```bash
@@ -14,14 +16,14 @@ uv run image-generate-mcp-remote --help
 ## Run
 
 ```bash
-# stdio
-uv run image-generate-mcp-remote
-
-# HTTP
+# Remote HTTP (default transport is streamable-http)
 uv run image-generate-mcp-remote --transport streamable-http --host 127.0.0.1 --port 3001
 
-# SSE
+# Remote SSE
 uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
+
+# Local stdio (debug / compatibility only)
+uv run image-generate-mcp-remote --transport stdio
 ```
 
 ## Tools
