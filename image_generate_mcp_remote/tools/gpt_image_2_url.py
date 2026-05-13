@@ -11,30 +11,49 @@ from pydantic import Field, field_validator
 
 from ..config import GPT_IMAGE_2_URL_NAME, ToolRuntimeConfig, get_settings
 from ..contracts.requests import PromptedImageRequestBase
-from ..contracts.image_size import SUPPORTED_IMAGE_SIZE_MAP
+from ..contracts.image_size import (
+    ImageAspectRatio,
+    ImageSizeTier,
+    SUPPORTED_IMAGE_SIZES,
+    SupportedImageSize,
+    supported_image_size_error_message,
+)
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, ToolVersion, UsageInfo
-from ..storage import build_image_uri, save_image_bytes_to_path
+from ..storage import build_image_uri, require_image_dimensions, save_image_bytes_to_path
 
 GPT_IMAGE_2_URL_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_2_URL_RESPONSE_EXCERPT_LIMIT = 400
 GPT_IMAGE_2_URL_RESPONSE_FORMAT_URL = "url"
 GPT_IMAGE_2_URL_MAX_ATTEMPTS = 3
-GPT_IMAGE_2_URL_ALLOWED_SIZE_POOL: frozenset[str] = frozenset(
+GPT_IMAGE_2_URL_BENCHMARK_VERIFIED_SIZE_KEYS: frozenset[tuple[ImageSizeTier, ImageAspectRatio]] = frozenset(
     {
-        "960x1280",
-        "1280x720",
-        "1360x2048",
-        "2048x1152",
-        "2048x864",
-        "3520x2336",
-        "2480x3312",
-        "3312x2480",
-        "2160x3840",
-        "3840x2160",
-        "3840x1632",
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.SQUARE),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.PORTRAIT_2_3),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.PORTRAIT_3_4),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.STANDARD_4_3),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.SOCIAL_4_5),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.LARGE_5_4),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.STORY_9_16),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.WIDE_16_9),
+        (ImageSizeTier.SIZE_2K, ImageAspectRatio.CINEMA_21_9),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.PORTRAIT_2_3),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.PHOTO_3_2),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.PORTRAIT_3_4),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.STANDARD_4_3),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.SOCIAL_4_5),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.LARGE_5_4),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.STORY_9_16),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.WIDE_16_9),
+        (ImageSizeTier.SIZE_4K, ImageAspectRatio.CINEMA_21_9),
     }
 )
+GPT_IMAGE_2_URL_ALLOWED_SIZES: tuple[SupportedImageSize, ...] = tuple(
+    preset
+    for preset in SUPPORTED_IMAGE_SIZES
+    if preset.tier is ImageSizeTier.SIZE_1K or (preset.tier, preset.aspect_ratio) in GPT_IMAGE_2_URL_BENCHMARK_VERIFIED_SIZE_KEYS
+)
+GPT_IMAGE_2_URL_ALLOWED_SIZE_VALUES: frozenset[str] = frozenset(preset.value for preset in GPT_IMAGE_2_URL_ALLOWED_SIZES)
 
 
 class GptImage2UrlGenerateRequest(PromptedImageRequestBase):
@@ -48,11 +67,13 @@ class GptImage2UrlGenerateRequest(PromptedImageRequestBase):
     def validate_size(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        if value not in SUPPORTED_IMAGE_SIZE_MAP:
-            raise ValueError("size must be one of the shared supported image size presets")
-        if value not in GPT_IMAGE_2_URL_ALLOWED_SIZE_POOL:
-            allowed_sizes = ", ".join(sorted(GPT_IMAGE_2_URL_ALLOWED_SIZE_POOL))
-            raise ValueError(f"size is not in the verified gpt-image-2-url size pool: {allowed_sizes}")
+        if value not in GPT_IMAGE_2_URL_ALLOWED_SIZE_VALUES:
+            raise ValueError(
+                supported_image_size_error_message(
+                    "size must be one of the gpt-image-2-url supported presets: all shared 1K presets plus benchmark-verified presets",
+                    GPT_IMAGE_2_URL_ALLOWED_SIZES,
+                )
+            )
         return value
 
 
@@ -197,6 +218,7 @@ def gpt_image_2_url_generate(
             elapsed_seconds: float = time.perf_counter() - started_at
             file_path = save_image_bytes_to_path(download_response.content, request.save_path)
             mime_type = _mime_type_from_download(download_response, request.save_path, image_url)
+            width, height = require_image_dimensions(GPT_IMAGE_2_URL_NAME, ImageToolMode.GENERATE.value, download_response.content)
             return ImageToolResult(
                 tool_name=GPT_IMAGE_2_URL_NAME,
                 tool_version=ToolVersion.V1,
@@ -206,6 +228,8 @@ def gpt_image_2_url_generate(
                 image_uri=build_image_uri(Path(file_path)),
                 mime_type=mime_type,
                 elapsed_seconds=elapsed_seconds,
+                width=width,
+                height=height,
                 usage=_extract_usage(response_json),
                 provider_response_excerpt=_provider_excerpt(response_json, image_url),
             )

@@ -118,6 +118,7 @@ class ToolEnvValuesNonSecret(BaseModel):
     output_dir: str
     image_base_url: str
     image_base_url_source: str
+    image_http_timeout_seconds: float
 
 
 class ToolCatalogEntry(BaseModel):
@@ -133,6 +134,7 @@ class ToolCatalogEntry(BaseModel):
     effective_model: str
     supported_models_default: list[str]
     supported_models_effective: list[str]
+    supported_size_presets: list[str]
     env_vars: list[str]
     env_values_non_secret: ToolEnvValuesNonSecret
     api_key_configured: bool

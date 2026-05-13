@@ -10,14 +10,14 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import field_validator, model_validator
 
 from ..contracts.enums import ImageBackground, ImageCount, ImageModeration, ImageOutputFormat, ImageQuality
 from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
 from ..config import GPT_IMAGE_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
-from ..storage import build_image_uri, decode_base64_image, save_image_bytes_to_path
+from ..storage import build_image_uri, decode_base64_image, require_image_dimensions, save_image_bytes_to_path
 from ..contracts.image_size import normalize_supported_size
 
 GPT_IMAGE_GENERATIONS_PATH = "/images/generations"
@@ -205,6 +205,7 @@ def _parse_image_response(
         raise ResponseParseError(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, "response missing data[0].b64_json")
 
     image_bytes = decode_base64_image(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, image_base64)
+    width, height = require_image_dimensions(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, image_bytes)
     mime_type = _mime_type_for_output(output_format)
     file_path = save_image_bytes_to_path(image_bytes, save_path)
     return ImageToolResult(
@@ -216,6 +217,8 @@ def _parse_image_response(
         image_uri=build_image_uri(file_path),
         mime_type=mime_type,
         elapsed_seconds=elapsed_seconds,
+        width=width,
+        height=height,
         usage=_extract_usage(response_json),
         provider_response_excerpt=_provider_excerpt(response_json),
     )

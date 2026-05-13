@@ -30,6 +30,11 @@ class DummyResponse:
         return self._payload
 
 
+PNG_1X1_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO9q1fQAAAAASUVORK5CYII="
+)
+
+
 @pytest.fixture(autouse=True)
 def clear_settings_cache():
     get_settings.cache_clear()
@@ -47,7 +52,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
         captured["headers"] = headers
         captured["json"] = json
         captured["timeout"] = timeout
-        image_payload = base64.b64encode(b"png-bytes").decode("utf-8")
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse({"created": 123, "data": [{"b64_json": image_payload}], "usage": {"total_tokens": 5}})
 
     monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
@@ -81,6 +86,8 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
     assert result.image_uri.startswith("file://")
     assert result.mime_type == "image/png"
     assert result.elapsed_seconds >= 0
+    assert result.width == 1
+    assert result.height == 1
 
 
 def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path):
@@ -103,7 +110,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
         captured["data"] = data
         captured["files"] = files
         captured["timeout"] = timeout
-        image_payload = base64.b64encode(b"edited-image").decode("utf-8")
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse({"created": 456, "data": [{"b64_json": image_payload}]})
 
     monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
@@ -126,6 +133,8 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     assert captured["files"][1][0] == "mask"
     assert result.mime_type == "image/webp"
     assert result.file_path.endswith("edited.webp")
+    assert result.width == 1
+    assert result.height == 1
 
 
 def test_gpt_generate_normalizes_small_size_without_upstream_call_failure(monkeypatch, tmp_path: Path):
@@ -136,7 +145,7 @@ def test_gpt_generate_normalizes_small_size_without_upstream_call_failure(monkey
 
     def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
         captured["json"] = json
-        image_payload = base64.b64encode(b"small-size").decode("utf-8")
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse({"created": 999, "data": [{"b64_json": image_payload}]})
 
     monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
@@ -161,7 +170,7 @@ def test_gpt_generate_rejects_malformed_size_without_upstream_call(monkeypatch):
 
     monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="Supported size presets"):
         try:
             gpt_image_2_official_generate(
                 version=ToolVersion.V1,

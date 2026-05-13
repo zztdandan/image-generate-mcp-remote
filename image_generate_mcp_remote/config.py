@@ -17,7 +17,7 @@ GPT_IMAGE_2_OFFICIAL_NAME = "gpt_image_2_official"
 NANO_BANANA_2_OFFICIAL_NAME = "nano_banana_2_official"
 GPT_IMAGE_2_URL_NAME = "gpt-image-2-url"
 SERVICE_NAME = "image-generate-mcp-remote"
-SERVICE_VERSION = "0.9.1"
+SERVICE_VERSION = "0.9.2"
 
 GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL = "https://www.uocode.com/v1"
 GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL = "gpt-image-2"

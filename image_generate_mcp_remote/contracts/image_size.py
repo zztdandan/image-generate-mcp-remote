@@ -8,6 +8,7 @@ from enum import StrEnum
 
 SIZE_DELIMITER = "x"
 SIZE_AUTO = "auto"
+SUPPORTED_SIZE_ITEM_DELIMITER = ", "
 
 
 class ImageSizeTier(StrEnum):
@@ -83,17 +84,46 @@ SUPPORTED_IMAGE_SIZES: tuple[SupportedImageSize, ...] = (
 SUPPORTED_IMAGE_SIZE_MAP: dict[str, SupportedImageSize] = {preset.value: preset for preset in SUPPORTED_IMAGE_SIZES}
 
 
+def supported_image_sizes_for_tier(tier: ImageSizeTier) -> tuple[SupportedImageSize, ...]:
+    """Return the canonical presets for one named resolution tier."""
+
+    return tuple(preset for preset in SUPPORTED_IMAGE_SIZES if preset.tier is tier)
+
+
+def supported_size_values(sizes: tuple[SupportedImageSize, ...]) -> tuple[str, ...]:
+    """Return sorted `<width>x<height>` values for human-readable validation messages."""
+
+    return tuple(sorted(preset.value for preset in sizes))
+
+
+def format_supported_image_sizes(sizes: tuple[SupportedImageSize, ...]) -> str:
+    """Format presets with their tier and aspect ratio so callers can pick the right value."""
+
+    formatted_items: list[str] = [f"{preset.value} ({preset.tier.value}, {preset.aspect_ratio.value})" for preset in sorted(sizes, key=_sort_key)]
+    return SUPPORTED_SIZE_ITEM_DELIMITER.join(formatted_items)
+
+
+def supported_image_size_error_message(reason: str, sizes: tuple[SupportedImageSize, ...] = SUPPORTED_IMAGE_SIZES) -> str:
+    """Build a size validation error that always includes discoverable supported presets."""
+
+    return f"{reason}. Supported size presets: {format_supported_image_sizes(sizes)}"
+
+
+def _sort_key(preset: SupportedImageSize) -> tuple[int, int, int]:
+    return (preset.width * preset.height, preset.width, preset.height)
+
+
 def parse_requested_size(size: str) -> tuple[int, int]:
     """Parse a `<width>x<height>` size string into positive integers."""
 
     parts: list[str] = size.split(SIZE_DELIMITER)
     if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
-        raise ValueError("size must use the format <width>x<height>")
+        raise ValueError(supported_image_size_error_message("size must use the format <width>x<height>"))
 
     width: int = int(parts[0])
     height: int = int(parts[1])
     if width <= 0 or height <= 0:
-        raise ValueError("width and height must be positive integers")
+        raise ValueError(supported_image_size_error_message("width and height must be positive integers"))
     return width, height
 
 

@@ -26,6 +26,11 @@ class DummyResponse:
         return self._payload
 
 
+PNG_1X1_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO9q1fQAAAAASUVORK5CYII="
+)
+
+
 @pytest.fixture(autouse=True)
 def clear_settings_cache():
     get_settings.cache_clear()
@@ -42,7 +47,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
         captured["url"] = url
         captured["headers"] = headers
         captured["json"] = json
-        image_payload = base64.b64encode(b"nano-image").decode("utf-8")
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse(
             {
                 "responseId": "resp-1",
@@ -69,6 +74,8 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert Path(result.file_path).exists()
     assert result.file_path.endswith("nano.png")
     assert result.elapsed_seconds >= 0
+    assert result.width == 1
+    assert result.height == 1
 
 
 def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
@@ -80,7 +87,7 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
 
     def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
         captured["json"] = json
-        image_payload = base64.b64encode(b"nano-edit").decode("utf-8")
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse(
             {
                 "responseId": "resp-2",
@@ -116,6 +123,8 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
     assert result.mime_type == "image/jpeg"
     assert result.text_output == "done"
     assert result.file_path.endswith("nano-edit.jpg")
+    assert result.width == 1
+    assert result.height == 1
 
 
 def test_nano_rejects_missing_image_modality(monkeypatch):
@@ -129,3 +138,18 @@ def test_nano_rejects_missing_image_modality(monkeypatch):
             save_path="/tmp/text-only.png",
             response_modalities=[ResponseModality.TEXT],
         )
+
+
+def test_nano_rejects_malformed_size_with_supported_size_list(monkeypatch):
+    monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "secret-key")
+
+    with pytest.raises(ValueError, match="Supported size presets") as exc_info:
+        nano_banana_2_official_generate(
+            version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            prompt="bad size",
+            save_path="/tmp/bad-size.png",
+            size="1024*1024",
+            response_modalities=[ResponseModality.IMAGE],
+        )
+    assert "1280x1280 (1K, 1:1)" in str(exc_info.value)

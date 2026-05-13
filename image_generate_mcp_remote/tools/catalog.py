@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from ..config import (
     IMAGE_BASE_URL_ENV,
+    IMAGE_HTTP_TIMEOUT_SECONDS_ENV,
     IMAGE_OUTPUT_DIR_ENV,
     LOG_LEVEL_ENV,
     SERVICE_NAME,
@@ -15,8 +16,10 @@ from ..config import (
     ToolRuntimeConfig,
     get_settings,
 )
+from ..contracts.image_size import SUPPORTED_IMAGE_SIZES, SupportedImageSize
 from ..errors import ValidationError
-from ..models.common import ImageToolMode, ToolCatalogEntry, ToolCatalogResponse, ToolEnvValuesNonSecret, ToolVersion
+from ..models.common import ToolCatalogEntry, ToolCatalogResponse, ToolEnvValuesNonSecret, ToolVersion
+from .gpt_image_2_url import GPT_IMAGE_2_URL_ALLOWED_SIZES
 
 CATALOG_TOOL_NAME = "list_image_tools_catalog"
 
@@ -41,7 +44,19 @@ def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSec
         output_dir=str(Path(settings.image_output_dir)),
         image_base_url=settings.image_base_url,
         image_base_url_source="env" if settings.image_base_url else "default",
+        image_http_timeout_seconds=settings.image_http_timeout_seconds,
     )
+
+
+def _supported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
+    """Expose per-tool size presets in the catalog for MCP clients and agents."""
+
+    size_presets: tuple[SupportedImageSize, ...]
+    if runtime_config.tool_name == "gpt-image-2-url":
+        size_presets = GPT_IMAGE_2_URL_ALLOWED_SIZES
+    else:
+        size_presets = SUPPORTED_IMAGE_SIZES
+    return [f"{preset.value} ({preset.tier.value}, {preset.aspect_ratio.value})" for preset in size_presets]
 
 
 def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
@@ -58,6 +73,7 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
         effective_model=runtime_config.effective_model,
         supported_models_default=list(runtime_config.supported_models_default),
         supported_models_effective=list(runtime_config.supported_models_effective),
+        supported_size_presets=_supported_size_presets(runtime_config),
         env_vars=[
             runtime_config.env_names.api_key,
             runtime_config.env_names.base_url,
@@ -65,6 +81,7 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
             runtime_config.env_names.supported_models,
             IMAGE_OUTPUT_DIR_ENV,
             IMAGE_BASE_URL_ENV,
+            IMAGE_HTTP_TIMEOUT_SECONDS_ENV,
             LOG_LEVEL_ENV,
         ],
         env_values_non_secret=_non_secret_values(runtime_config),

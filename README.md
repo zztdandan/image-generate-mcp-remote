@@ -29,13 +29,17 @@
 - 典型接口：
   - `POST /v1beta/models/{model}:generateContent`
 
-## 安装与启动
-
-## 通过 uv 安装使用
+## 通过 uv / PyPI 安装使用
 
 `uv` 本身没有单独的“官方包仓库”，常规做法是把包发布到 `PyPI`，然后让用户通过 `uv` 直接下载运行。
 
-当 `v0.9.1` 发布到 `PyPI` 后，可直接这样使用：
+当前发布链路会把 GitHub Release 对应版本自动发布到 `PyPI`。
+
+- PyPI 项目名：`image-generate-mcp-remote`
+- 推荐临时运行：`uvx image-generate-mcp-remote --transport stdio`
+- 推荐安装到工具目录：`uv tool install image-generate-mcp-remote`
+
+例如，安装 `v0.9.2` 后可直接这样使用：
 
 ```bash
 # 临时运行，不落本地项目源码
@@ -44,7 +48,12 @@ uvx image-generate-mcp-remote --transport stdio
 # 或安装为全局工具
 uv tool install image-generate-mcp-remote
 image-generate-mcp-remote --transport stdio
+
+# 指定版本
+uvx --from image-generate-mcp-remote==0.9.2 image-generate-mcp-remote --transport stdio
 ```
+
+## 从源码安装与启动
 
 ### 1. 安装依赖
 
@@ -190,6 +199,7 @@ OpenAI Images 兼容工具。
 - `mode=edit` 时调用参考图编辑 / 图生图
 - 默认请求上游：`https://www.uocode.com/v1`
 - 若传入 `size="宽x高"`，服务会自动归一化到支持的 30 档常用尺寸后再请求上游
+- 如传入无法解析的 `size`，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
 
 ### `nano_banana_2_official`
 
@@ -206,9 +216,11 @@ URL 返回型 `gpt-image-2` 独立工具。
 - 调用接口：`POST /images/generations`
 - 默认请求上游：`https://www.right.codes/draw/v1`
 - 默认模型：`gpt-image-2-vip`
-- 上游返回 `https` 图片地址后，服务会自动下载并保存到 `save_path`
+- 该工具会向上游请求 `response_format=url`，上游返回 `https` 图片地址后，服务端会自动下载该 URL 并保存到 `save_path`；调用方不需要再手动下载
+- 入参 `image` 是可选的参考图 URL 列表，不是输出图片 URL
 - 返回结果继续复用统一 `ImageToolResult` 结构，保留耗时、token 使用量与上游响应摘要
-- 仅接受共享的 30 档 `size="宽x高"` 预设尺寸
+- `size="宽x高"` 仅接受该 URL 工具支持的预设：全部 1K 共享尺寸，加上 `storage/images/benchmark-*` 中已实测通过的尺寸
+- 如传入不支持的 `size`，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
 
 ## 环境变量说明
 
@@ -236,7 +248,7 @@ URL 返回型 `gpt-image-2` 独立工具。
 | --- | --- | --- | --- |
 | `IMAGE_OUTPUT_DIR` | 否 | `storage/images` | 生成图片的落盘目录 |
 | `IMAGE_BASE_URL` | 否 | 空 | 若需要对外暴露图片 URL，可配置对应静态资源基地址 |
-| `IMAGE_HTTP_TIMEOUT_SECONDS` | 否 | `600` | 上游图片生成请求超时时间，单位秒 |
+| `IMAGE_HTTP_TIMEOUT_SECONDS` | 否 | `600` | 服务端请求上游图片生成接口及下载图片的 HTTP 超时时间，单位秒；远端 MCP 客户端自身也可能有独立 tool-call 超时，需要在客户端侧另行调大（建议至少 360 秒） |
 | `LOG_LEVEL` | 否 | `INFO` | 日志级别 |
 
 ### GPT Image 2 URL 工具
@@ -256,9 +268,9 @@ uv run pytest
 
 ## 发布说明
 
-- GitHub Release：创建如 `v0.9.1` 的 release 后，会自动触发 `.github/workflows/release.yml`
+- GitHub Release：创建如 `v0.9.2` 的 release 后，会自动触发 `.github/workflows/release.yml`
 - PyPI 发布：工作流使用 `uv build --no-sources` 与 `uv publish`
-- Trusted Publishing：建议在 `PyPI` 中为仓库 `zztdandan/image-generate-mcp-remote` 配置 GitHub Actions trusted publisher，并将 workflow 文件名填写为 `.github/workflows/release.yml`、environment 填写 `pypi`
+- Trusted Publishing：建议在 `PyPI` 中为仓库 `zztdandan/image-generate-mcp-remote` 配置 GitHub Actions trusted publisher，并将 workflow 文件名填写为 `release.yml`、environment 填写 `pypi`
 - Token 回退方案：若暂不使用 Trusted Publishing，可在 GitHub 仓库 secrets 中配置 `UV_PUBLISH_TOKEN`，同一工作流会自动读取并发布
 
 ## 许可证

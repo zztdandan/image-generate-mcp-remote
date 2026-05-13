@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import time
+from typing import Literal
 
 import httpx
 from pydantic import BaseModel, Field, model_validator
@@ -14,7 +15,7 @@ from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
 from ..config import NANO_BANANA_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
-from ..storage import build_image_uri, save_image_bytes_to_path
+from ..storage import build_image_uri, require_image_dimensions, save_image_bytes_to_path
 from .gpt_image_2_official import _resolve_input_image
 
 NANO_BANANA_RESPONSE_EXCERPT_LIMIT = 400
@@ -222,6 +223,7 @@ def _parse_response(
                 data = inline_data.get("data")
                 if isinstance(mime_type, str) and isinstance(data, str) and data:
                     image_bytes = base64.b64decode(data)
+                    width, height = require_image_dimensions(NANO_BANANA_2_OFFICIAL_NAME, mode.value, image_bytes)
                     file_path = save_image_bytes_to_path(image_bytes, save_path)
                     return ImageToolResult(
                         tool_name=NANO_BANANA_2_OFFICIAL_NAME,
@@ -232,6 +234,8 @@ def _parse_response(
                         image_uri=build_image_uri(file_path),
                         mime_type=mime_type,
                         elapsed_seconds=elapsed_seconds,
+                        width=width,
+                        height=height,
                         usage=_usage_info(response_json),
                         provider_response_excerpt=_provider_excerpt(response_json),
                         text_output="\n".join(text_fragments) if include_text_output and text_fragments else None,

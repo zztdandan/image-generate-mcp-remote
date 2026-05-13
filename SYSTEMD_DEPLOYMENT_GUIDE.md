@@ -4,6 +4,8 @@
 
 本文档已去除个人隐私信息；所有路径均使用通用占位符表示。
 
+补充说明：项目现在已经发布到 `PyPI`，除了源码部署外，也可以使用 `uvx` 或 `uv tool install image-generate-mcp-remote` 拉取已发布版本。
+
 ## 1. 适用场景
 
 当前真实使用场景是：
@@ -26,6 +28,18 @@
 例如：
 
 - `<deploy-root>` 可以是 `~/mcp/image-generate-mcp`
+
+如果你希望固定到某个已发布版本，例如 `0.9.2`，推荐在部署目录中显式执行：
+
+```bash
+uv tool install --refresh image-generate-mcp-remote==0.9.2
+```
+
+或者临时验证某个版本：
+
+```bash
+uvx --from image-generate-mcp-remote==0.9.2 image-generate-mcp-remote --help
+```
 
 ## 3. 当前部署模式对应的 unit 示例
 
@@ -199,6 +213,7 @@ journalctl --user -u image-generate-mcp.service -n 100 --no-pager
 ```
 
 注意：只有 `stdio` 这种客户端拉起进程的模式，`env` 才会直接生效到服务进程。
+生图调用耗时较长，`IMAGE_HTTP_TIMEOUT_SECONDS` 只控制本服务请求上游生图接口及下载图片的 HTTP 超时；如果客户端支持 MCP tool-call 超时配置，也应调到至少 `360` 秒，避免客户端先返回 `Request timed out`。
 
 ## 9. 常见问题
 

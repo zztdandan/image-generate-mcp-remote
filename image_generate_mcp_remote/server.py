@@ -65,7 +65,14 @@ def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
     return list_image_tools_catalog(version).model_dump(mode="json")
 
 
-@mcp.tool(title="GPT Image 2 Official", description="Generate or edit images via the OpenAI Images compatible gateway")
+@mcp.tool(
+    title="GPT Image 2 Official",
+    description=(
+        "Generate or edit images via the OpenAI Images compatible gateway. "
+        "The size parameter accepts auto or a '<width>x<height>' value; invalid size errors include the supported preset list. "
+        "Call list_image_tools_catalog first when you need the current supported size presets."
+    ),
+)
 def gpt_image_2_official(
     version: ToolVersion,
     mode: ImageToolMode,
@@ -115,7 +122,14 @@ def gpt_image_2_official(
     ).model_dump(mode="json")
 
 
-@mcp.tool(title="Nano Banana 2 Official", description="Generate or edit images via the Gemini compatible gateway")
+@mcp.tool(
+    title="Nano Banana 2 Official",
+    description=(
+        "Generate or edit images via the Gemini compatible gateway. "
+        "Prefer aspect_ratio plus image_size, or pass size as '<width>x<height>' to map to the nearest shared preset. "
+        "Invalid size errors include the supported preset list."
+    ),
+)
 def nano_banana_2_official(
     version: ToolVersion,
     mode: ImageToolMode,
@@ -162,7 +176,18 @@ def nano_banana_2_official(
     ).model_dump(mode="json")
 
 
-@mcp.tool(name="gpt-image-2-url", title="GPT Image 2 URL", description="Generate images via the URL-returning gateway and download the result locally")
+@mcp.tool(
+    name="gpt-image-2-url",
+    title="GPT Image 2 URL",
+    description=(
+        "Generate images through the right.codes draw-compatible endpoint. "
+        "This tool asks upstream for response_format=url, then downloads that returned image URL and saves it to save_path; "
+        "callers do not need to download the URL themselves. "
+        "The image parameter is an optional list of reference image URLs, not an output URL. "
+        "The size parameter must be one supported '<width>x<height>' preset; invalid size errors include the supported list. "
+        "Call list_image_tools_catalog first to inspect supported_size_presets and image_http_timeout_seconds."
+    ),
+)
 def gpt_image_2_url(
     version: ToolVersion,
     prompt: str,
