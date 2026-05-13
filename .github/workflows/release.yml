@@ -11,6 +11,8 @@ jobs:
     name: Build and publish package
     runs-on: ubuntu-latest
     environment: pypi
+    env:
+      UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
     permissions:
       contents: write
       id-token: write
@@ -45,11 +47,9 @@ jobs:
         run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
 
       - name: Publish distributions to PyPI with token
-        if: ${{ secrets.UV_PUBLISH_TOKEN != '' }}
-        env:
-          UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
+        if: ${{ env.UV_PUBLISH_TOKEN != '' }}
         run: uv publish
 
       - name: Publish distributions to PyPI with trusted publishing
-        if: ${{ secrets.UV_PUBLISH_TOKEN == '' }}
+        if: ${{ env.UV_PUBLISH_TOKEN == '' }}
         run: uv publish
