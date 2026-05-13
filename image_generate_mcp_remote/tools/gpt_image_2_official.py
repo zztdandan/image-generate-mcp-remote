@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import mimetypes
+import time
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Literal
@@ -15,7 +16,7 @@ from pydantic import BaseModel, field_validator, model_validator
 from ..config import GPT_IMAGE_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
-from ..storage import build_image_uri, decode_base64_image, save_image_bytes
+from ..storage import build_image_uri, decode_base64_image, save_image_bytes_to_path
 
 GPT_IMAGE_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_EDITS_PATH = "/images/edits"
@@ -61,6 +62,7 @@ class GptImageGenerateRequest(BaseModel):
     version: ToolVersion
     mode: Literal[ImageToolMode.GENERATE]
     prompt: str
+    save_path: str
     model: str | None = None
     size: str | None = "auto"
     quality: GptImageQuality = GptImageQuality.AUTO
@@ -94,6 +96,7 @@ class GptImageEditRequest(BaseModel):
     version: ToolVersion
     mode: Literal[ImageToolMode.EDIT]
     prompt: str
+    save_path: str
     model: str | None = None
     images: list[InputImage]
     mask: InputImage | None = None
@@ -252,6 +255,8 @@ def _parse_image_response(
     response_json: dict[str, object],
     provider_model: str,
     output_format: GptImageOutputFormat,
+    save_path: str,
+    elapsed_seconds: float,
 ) -> ImageToolResult:
     data_items = response_json.get("data")
     if not isinstance(data_items, list) or not data_items:
@@ -266,7 +271,7 @@ def _parse_image_response(
 
     image_bytes = decode_base64_image(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, image_base64)
     mime_type = _mime_type_for_output(output_format)
-    file_path = save_image_bytes(image_bytes, mime_type)
+    file_path = save_image_bytes_to_path(image_bytes, save_path)
     return ImageToolResult(
         tool_name=GPT_IMAGE_2_OFFICIAL_NAME,
         tool_version=ToolVersion.V1,
@@ -275,6 +280,7 @@ def _parse_image_response(
         file_path=str(file_path),
         image_uri=build_image_uri(file_path),
         mime_type=mime_type,
+        elapsed_seconds=elapsed_seconds,
         usage=_extract_usage(response_json),
         provider_response_excerpt=_provider_excerpt(response_json),
     )
@@ -297,6 +303,7 @@ def gpt_image_2_official_generate(
     version: ToolVersion,
     mode: Literal[ImageToolMode.GENERATE],
     prompt: str,
+    save_path: str,
     model: str | None = None,
     size: str | None = "auto",
     quality: GptImageQuality = GptImageQuality.AUTO,
@@ -312,6 +319,7 @@ def gpt_image_2_official_generate(
         version=version,
         mode=mode,
         prompt=prompt,
+        save_path=save_path,
         model=model,
         size=size,
         quality=quality,
@@ -339,18 +347,22 @@ def gpt_image_2_official_generate(
     if request.output_compression is not None:
         payload["output_compression"] = request.output_compression
 
+    started_at: float = time.perf_counter()
     response = httpx.post(
         _build_endpoint(runtime_config.effective_base_url, GPT_IMAGE_GENERATIONS_PATH),
         headers=_build_headers(runtime_config),
         json=payload,
-        timeout=120.0,
+        timeout=get_settings().image_http_timeout_seconds,
     )
+    elapsed_seconds: float = time.perf_counter() - started_at
     response_json = _handle_upstream_response(request.mode, response)
     return _parse_image_response(
         request.mode,
         response_json,
         payload["model"],
         request.output_format,
+        request.save_path,
+        elapsed_seconds,
     )
 
 
@@ -358,6 +370,7 @@ def gpt_image_2_official_edit(
     version: ToolVersion,
     mode: Literal[ImageToolMode.EDIT],
     prompt: str,
+    save_path: str,
     images: list[InputImage],
     mask: InputImage | None = None,
     model: str | None = None,
@@ -373,6 +386,7 @@ def gpt_image_2_official_edit(
         version=version,
         mode=mode,
         prompt=prompt,
+        save_path=save_path,
         model=model,
         images=images,
         mask=mask,
@@ -408,17 +422,21 @@ def gpt_image_2_official_edit(
         resolved_mask = _resolve_input_image(request.mask)
         multipart_files.append(("mask", (resolved_mask.filename, resolved_mask.data, resolved_mask.mime_type)))
 
+    started_at: float = time.perf_counter()
     response = httpx.post(
         _build_endpoint(runtime_config.effective_base_url, GPT_IMAGE_EDITS_PATH),
         headers=_build_headers(runtime_config),
         data=form_data,
         files=multipart_files,
-        timeout=120.0,
+        timeout=get_settings().image_http_timeout_seconds,
     )
+    elapsed_seconds: float = time.perf_counter() - started_at
     response_json = _handle_upstream_response(request.mode, response)
     return _parse_image_response(
         request.mode,
         response_json,
         form_data["model"],
         request.output_format,
+        request.save_path,
+        elapsed_seconds,
     )

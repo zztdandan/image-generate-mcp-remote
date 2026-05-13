@@ -58,6 +58,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
         version=ToolVersion.V1,
         mode=ImageToolMode.GENERATE,
         prompt="make a fox",
+        save_path=str(tmp_path / "nano.png"),
         response_modalities=[ResponseModality.IMAGE],
         aspect_ratio=NanoBananaAspectRatio.SQUARE,
         image_size=NanoBananaImageSize.SIZE_1K,
@@ -68,6 +69,8 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert captured["json"]["contents"] == [{"parts": [{"text": "make a fox"}]}]
     assert captured["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
     assert Path(result.file_path).exists()
+    assert result.file_path.endswith("nano.png")
+    assert result.elapsed_seconds >= 0
 
 
 def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
@@ -102,6 +105,7 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
         version=ToolVersion.V1,
         mode=ImageToolMode.EDIT,
         prompt="add a hat",
+        save_path=str(tmp_path / "nano-edit.jpg"),
         input_images=[{"source_type": "path", "path": str(source_path)}],
         response_modalities=[ResponseModality.IMAGE, ResponseModality.TEXT],
     )
@@ -111,6 +115,7 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
     assert "inlineData" in parts[1]
     assert result.mime_type == "image/jpeg"
     assert result.text_output == "done"
+    assert result.file_path.endswith("nano-edit.jpg")
 
 
 def test_nano_rejects_missing_image_modality(monkeypatch):
@@ -121,5 +126,6 @@ def test_nano_rejects_missing_image_modality(monkeypatch):
             version=ToolVersion.V1,
             mode=ImageToolMode.GENERATE,
             prompt="text only",
+            save_path="/tmp/text-only.png",
             response_modalities=[ResponseModality.TEXT],
         )

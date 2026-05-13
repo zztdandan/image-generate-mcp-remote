@@ -51,6 +51,15 @@ def save_image_bytes(image_bytes: bytes, mime_type: str) -> Path:
     return file_path
 
 
+def save_image_bytes_to_path(image_bytes: bytes, save_path: str) -> Path:
+    """Persist image bytes to a caller-provided path."""
+
+    file_path = Path(save_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_bytes(image_bytes)
+    return file_path
+
+
 def decode_base64_image(tool_name: str, mode: str, image_base64: str) -> bytes:
     """Decode provider base64 output into raw bytes."""
 

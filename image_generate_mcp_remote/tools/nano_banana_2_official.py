@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import time
 from enum import StrEnum
 from typing import Literal
 
@@ -12,7 +13,7 @@ from pydantic import BaseModel, model_validator
 from ..config import NANO_BANANA_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
-from ..storage import build_image_uri, save_image_bytes
+from ..storage import build_image_uri, save_image_bytes_to_path
 from .gpt_image_2_official import _resolve_input_image
 
 NANO_BANANA_RESPONSE_EXCERPT_LIMIT = 400
@@ -47,6 +48,7 @@ class NanoBananaGenerateRequest(BaseModel):
     version: ToolVersion
     mode: Literal[ImageToolMode.GENERATE]
     prompt: str
+    save_path: str
     model: str | None = None
     response_modalities: list[ResponseModality] = [ResponseModality.IMAGE]
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
@@ -66,6 +68,7 @@ class NanoBananaEditRequest(BaseModel):
     version: ToolVersion
     mode: Literal[ImageToolMode.EDIT]
     prompt: str
+    save_path: str
     input_images: list[InputImage]
     model: str | None = None
     response_modalities: list[ResponseModality] = [ResponseModality.IMAGE]
@@ -170,6 +173,8 @@ def _parse_response(
     response_json: dict[str, object],
     provider_model: str,
     include_text_output: bool,
+    save_path: str,
+    elapsed_seconds: float,
 ) -> ImageToolResult:
     candidates = response_json.get("candidates")
     if not isinstance(candidates, list) or not candidates:
@@ -194,7 +199,7 @@ def _parse_response(
                 data = inline_data.get("data")
                 if isinstance(mime_type, str) and isinstance(data, str) and data:
                     image_bytes = base64.b64decode(data)
-                    file_path = save_image_bytes(image_bytes, mime_type)
+                    file_path = save_image_bytes_to_path(image_bytes, save_path)
                     return ImageToolResult(
                         tool_name=NANO_BANANA_2_OFFICIAL_NAME,
                         tool_version=ToolVersion.V1,
@@ -203,6 +208,7 @@ def _parse_response(
                         file_path=str(file_path),
                         image_uri=build_image_uri(file_path),
                         mime_type=mime_type,
+                        elapsed_seconds=elapsed_seconds,
                         usage=_usage_info(response_json),
                         provider_response_excerpt=_provider_excerpt(response_json),
                         text_output="\n".join(text_fragments) if include_text_output and text_fragments else None,
@@ -231,6 +237,7 @@ def nano_banana_2_official_generate(
     version: ToolVersion,
     mode: Literal[ImageToolMode.GENERATE],
     prompt: str,
+    save_path: str,
     model: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
@@ -244,6 +251,7 @@ def nano_banana_2_official_generate(
         version=version,
         mode=mode,
         prompt=prompt,
+        save_path=save_path,
         model=model,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
         aspect_ratio=aspect_ratio,
@@ -256,6 +264,7 @@ def nano_banana_2_official_generate(
     if provider_model not in runtime_config.supported_models_effective:
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
+    started_at: float = time.perf_counter()
     response = httpx.post(
         _build_endpoint(runtime_config, provider_model),
         headers=_build_headers(runtime_config),
@@ -268,14 +277,17 @@ def nano_banana_2_official_generate(
             include_thoughts=request.include_thoughts,
             inline_images=[],
         ),
-        timeout=120.0,
+        timeout=get_settings().image_http_timeout_seconds,
     )
+    elapsed_seconds: float = time.perf_counter() - started_at
     response_json = _handle_upstream_response(request.mode, response)
     return _parse_response(
         request.mode,
         response_json,
         provider_model,
         ResponseModality.TEXT in request.response_modalities,
+        request.save_path,
+        elapsed_seconds,
     )
 
 
@@ -283,6 +295,7 @@ def nano_banana_2_official_edit(
     version: ToolVersion,
     mode: Literal[ImageToolMode.EDIT],
     prompt: str,
+    save_path: str,
     input_images: list[InputImage],
     model: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
@@ -297,6 +310,7 @@ def nano_banana_2_official_edit(
         version=version,
         mode=mode,
         prompt=prompt,
+        save_path=save_path,
         input_images=input_images,
         model=model,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
@@ -311,6 +325,7 @@ def nano_banana_2_official_edit(
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
     resolved_images: list[ResolvedInputImage] = [_resolve_input_image(image) for image in request.input_images]
+    started_at: float = time.perf_counter()
     response = httpx.post(
         _build_endpoint(runtime_config, provider_model),
         headers=_build_headers(runtime_config),
@@ -323,12 +338,15 @@ def nano_banana_2_official_edit(
             include_thoughts=request.include_thoughts,
             inline_images=resolved_images,
         ),
-        timeout=120.0,
+        timeout=get_settings().image_http_timeout_seconds,
     )
+    elapsed_seconds: float = time.perf_counter() - started_at
     response_json = _handle_upstream_response(request.mode, response)
     return _parse_response(
         request.mode,
         response_json,
         provider_model,
         ResponseModality.TEXT in request.response_modalities,
+        request.save_path,
+        elapsed_seconds,
     )

@@ -42,6 +42,7 @@ NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_SU
 IMAGE_OUTPUT_DIR_ENV = "IMAGE_OUTPUT_DIR"
 IMAGE_BASE_URL_ENV = "IMAGE_BASE_URL"
 LOG_LEVEL_ENV = "LOG_LEVEL"
+IMAGE_HTTP_TIMEOUT_SECONDS_ENV = "IMAGE_HTTP_TIMEOUT_SECONDS"
 
 
 class ToolEnvironmentNames(BaseModel):
@@ -93,6 +94,7 @@ class Settings(BaseSettings):
 
     image_output_dir: Path = Field(default=DEFAULT_OUTPUT_DIR, alias=IMAGE_OUTPUT_DIR_ENV)
     image_base_url: str = Field(default="", alias=IMAGE_BASE_URL_ENV)
+    image_http_timeout_seconds: float = Field(default=600.0, alias=IMAGE_HTTP_TIMEOUT_SECONDS_ENV)
     log_level: str = Field(default=DEFAULT_LOG_LEVEL, alias=LOG_LEVEL_ENV)
 
     gpt_image_2_official_api_key: str = Field(default="", alias=GPT_IMAGE_2_OFFICIAL_API_KEY_ENV)

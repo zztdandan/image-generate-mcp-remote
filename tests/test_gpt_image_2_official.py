@@ -56,6 +56,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
         version=ToolVersion.V1,
         mode=ImageToolMode.GENERATE,
         prompt="draw a cat",
+        save_path=str(tmp_path / "generated.png"),
         size="1024x1024",
         quality=GptImageQuality.HIGH,
         output_format=GptImageOutputFormat.PNG,
@@ -76,8 +77,10 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
         "n": 1,
     }
     assert Path(result.file_path).exists()
+    assert result.file_path.endswith("generated.png")
     assert result.image_uri.startswith("file://")
     assert result.mime_type == "image/png"
+    assert result.elapsed_seconds >= 0
 
 
 def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path):
@@ -109,6 +112,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
         version=ToolVersion.V1,
         mode=ImageToolMode.EDIT,
         prompt="edit this",
+        save_path=str(tmp_path / "edited.webp"),
         images=[{"source_type": "path", "path": str(source_path)}],
         mask={"source_type": "base64", "data_base64": mask_base64, "filename": "mask.png", "mime_type": "image/png"},
         output_format=GptImageOutputFormat.WEBP,
@@ -121,6 +125,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     assert captured["files"][0][1][0] == "input.png"
     assert captured["files"][1][0] == "mask"
     assert result.mime_type == "image/webp"
+    assert result.file_path.endswith("edited.webp")
 
 
 def test_gpt_generate_rejects_invalid_size_without_upstream_call(monkeypatch):
@@ -137,6 +142,7 @@ def test_gpt_generate_rejects_invalid_size_without_upstream_call(monkeypatch):
                 version=ToolVersion.V1,
                 mode=ImageToolMode.GENERATE,
                 prompt="bad size",
+                save_path="/tmp/bad-size.png",
                 size="100x100",
             )
         except Exception as exc:

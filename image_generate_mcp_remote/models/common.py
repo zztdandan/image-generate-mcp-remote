@@ -98,6 +98,7 @@ class ImageToolResult(BaseModel):
     file_path: str
     image_uri: str
     mime_type: str
+    elapsed_seconds: float
     width: int | None = None
     height: int | None = None
     usage: UsageInfo | None = None
