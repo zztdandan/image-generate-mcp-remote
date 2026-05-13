@@ -64,7 +64,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
         image_size=NanoBananaImageSize.SIZE_1K,
     )
 
-    assert captured["url"] == "https://api.apiyi.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
+    assert captured["url"] == "https://www.uocode.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
     assert captured["headers"] == {"Content-Type": "application/json", "x-goog-api-key": "secret-key"}
     assert captured["json"]["contents"] == [{"parts": [{"text": "make a fox"}]}]
     assert captured["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]

@@ -18,11 +18,11 @@ NANO_BANANA_2_OFFICIAL_NAME = "nano_banana_2_official"
 SERVICE_NAME = "image-generate-mcp-remote"
 SERVICE_VERSION = "0.1.0"
 
-GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL = "https://api.apiyi.com/v1"
+GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL = "https://www.uocode.com/v1"
 GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL = "gpt-image-2"
 GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT = ["gpt-image-2"]
 
-NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL = "https://api.apiyi.com"
+NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL = "https://www.uocode.com"
 NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL = "gemini-3.1-flash-image-preview"
 NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT = ["gemini-3.1-flash-image-preview"]
 
