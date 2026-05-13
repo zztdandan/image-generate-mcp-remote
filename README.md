@@ -9,7 +9,7 @@ Remote MCP server for image generation, built with UV + Python.
 ```bash
 uv sync
 cp .env.example .env
-# fill OPENAI_API_KEY
+# fill the IMG_GEN_* API keys you need
 uv run image-generate-mcp-remote --help
 ```
 
@@ -28,5 +28,20 @@ uv run image-generate-mcp-remote --transport stdio
 
 ## Tools
 
-- `health_check`: report server status
-- `generate_image`: generate an image with OpenAI Images API and save locally
+- `list_image_tools_catalog`: report defaults, env surface, and effective non-secret config
+- `gpt_image_2_official`: OpenAI Images compatible generate/edit tool
+- `nano_banana_2_official`: Gemini generateContent compatible generate/edit tool
+
+## Environment
+
+- `IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY`
+- `IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL`
+- `IMG_GEN_GPT_IMAGE_2_OFFICIAL_MODEL`
+- `IMG_GEN_GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS`
+- `IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY`
+- `IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL`
+- `IMG_GEN_NANO_BANANA_2_OFFICIAL_MODEL`
+- `IMG_GEN_NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS`
+- `IMAGE_OUTPUT_DIR`
+- `IMAGE_BASE_URL`
+- `LOG_LEVEL`

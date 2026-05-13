@@ -1,27 +1,41 @@
-"""Main MCP server implementation."""
+"""Main MCP server implementation for image-only tools."""
 
 from __future__ import annotations
 
 import argparse
-import base64
-import binascii
 import logging
 import sys
-from datetime import UTC, datetime
-from pathlib import Path
-from uuid import uuid4
 
 from mcp.server.fastmcp import FastMCP
-from openai import OpenAI
 
-from .config import Settings
+from .config import SERVICE_NAME, get_settings
+from .models.common import ImageToolMode, InputImage, ToolVersion
+from .tools.catalog import list_image_tools_catalog
+from .tools.gpt_image_2_official import (
+    GptImageBackground,
+    GptImageCount,
+    GptImageModeration,
+    GptImageOutputFormat,
+    GptImageQuality,
+    gpt_image_2_official_edit,
+    gpt_image_2_official_generate,
+)
+from .tools.nano_banana_2_official import (
+    NanoBananaAspectRatio,
+    NanoBananaImageSize,
+    NanoBananaThinkingLevel,
+    ResponseModality,
+    nano_banana_2_official_edit,
+    nano_banana_2_official_generate,
+)
 
 logger = logging.getLogger(__name__)
-settings = Settings()
 mcp = FastMCP(name="Image Generate MCP Remote")
 
 
 def configure_logging(level: str) -> None:
+    """Configure root logging for CLI startup."""
+
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -30,6 +44,8 @@ def configure_logging(level: str) -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for supported MCP transports."""
+
     parser = argparse.ArgumentParser(description="Remote MCP server for image generation")
     parser.add_argument(
         "--transport",
@@ -41,76 +57,106 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _client() -> OpenAI:
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured")
-    return OpenAI(api_key=settings.openai_api_key)
+@mcp.tool(title="Image Tools Catalog", description="List image tool defaults and effective config")
+def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
+    """Expose image tool catalog as an MCP tool."""
+
+    return list_image_tools_catalog(version).model_dump(mode="json")
 
 
-def _output_dir() -> Path:
-    path = Path(settings.image_output_dir)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _save_base64_image(image_base64: str) -> Path:
-    try:
-        content = base64.b64decode(image_base64)
-    except binascii.Error as exc:
-        raise RuntimeError("OpenAI did not return valid base64 image data") from exc
-
-    file_path = _output_dir() / f"img_{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{uuid4().hex[:8]}.png"
-    file_path.write_bytes(content)
-    return file_path
-
-
-def _public_uri(path: Path) -> str:
-    if settings.image_base_url:
-        return f"{settings.image_base_url.rstrip('/')}/{path.name}"
-    return path.resolve().as_uri()
-
-
-@mcp.tool(title="Health Check", description="Check whether the server is ready")
-def health_check() -> dict[str, str]:
-    return {
-        "status": "healthy",
-        "service": "image-generate-mcp-remote",
-        "model": settings.image_model,
-        "output_dir": str(_output_dir()),
-    }
-
-
-@mcp.tool(title="Generate Image", description="Generate an image from a prompt")
-def generate_image(
+@mcp.tool(title="GPT Image 2 Official", description="Generate or edit images via the OpenAI Images compatible gateway")
+def gpt_image_2_official(
+    version: ToolVersion,
+    mode: ImageToolMode,
     prompt: str,
-    size: str = "1024x1024",
-    quality: str = "medium",
-    background: str = "auto",
-) -> dict[str, str]:
-    client = _client()
-    result = client.images.generate(
-        model=settings.image_model,
+    model: str | None = None,
+    size: str | None = "auto",
+    quality: GptImageQuality = GptImageQuality.AUTO,
+    output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
+    output_compression: int | None = None,
+    background: GptImageBackground = GptImageBackground.AUTO,
+    moderation: GptImageModeration = GptImageModeration.AUTO,
+    n: GptImageCount = GptImageCount.SINGLE,
+    images: list[InputImage] | None = None,
+    mask: InputImage | None = None,
+) -> dict[str, object]:
+    """Expose generate/edit behavior behind one product-level tool."""
+
+    if mode is ImageToolMode.GENERATE:
+        return gpt_image_2_official_generate(
+            version=version,
+            mode=ImageToolMode.GENERATE,
+            prompt=prompt,
+            model=model,
+            size=size,
+            quality=quality,
+            output_format=output_format,
+            output_compression=output_compression,
+            background=background,
+            moderation=moderation,
+            n=n,
+        ).model_dump(mode="json")
+    return gpt_image_2_official_edit(
+        version=version,
+        mode=ImageToolMode.EDIT,
         prompt=prompt,
+        model=model,
+        images=images or [],
+        mask=mask,
         size=size,
         quality=quality,
+        output_format=output_format,
+        output_compression=output_compression,
         background=background,
-    )
+    ).model_dump(mode="json")
 
-    if not result.data or not result.data[0].b64_json:
-        raise RuntimeError("OpenAI did not return image content")
 
-    file_path = _save_base64_image(result.data[0].b64_json)
-    return {
-        "status": "ok",
-        "model": settings.image_model,
-        "prompt": prompt,
-        "file_path": str(file_path),
-        "image_uri": _public_uri(file_path),
-    }
+@mcp.tool(title="Nano Banana 2 Official", description="Generate or edit images via the Gemini compatible gateway")
+def nano_banana_2_official(
+    version: ToolVersion,
+    mode: ImageToolMode,
+    prompt: str,
+    model: str | None = None,
+    response_modalities: list[ResponseModality] | None = None,
+    aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
+    image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
+    thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
+    include_thoughts: bool = False,
+    input_images: list[InputImage] | None = None,
+) -> dict[str, object]:
+    """Expose generate/edit behavior behind one product-level tool."""
+
+    if mode is ImageToolMode.GENERATE:
+        return nano_banana_2_official_generate(
+            version=version,
+            mode=ImageToolMode.GENERATE,
+            prompt=prompt,
+            model=model,
+            response_modalities=response_modalities,
+            aspect_ratio=aspect_ratio,
+            image_size=image_size,
+            thinking_level=thinking_level,
+            include_thoughts=include_thoughts,
+        ).model_dump(mode="json")
+    return nano_banana_2_official_edit(
+        version=version,
+        mode=ImageToolMode.EDIT,
+        prompt=prompt,
+        input_images=input_images or [],
+        model=model,
+        response_modalities=response_modalities,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
+        thinking_level=thinking_level,
+        include_thoughts=include_thoughts,
+    ).model_dump(mode="json")
 
 
 def main() -> None:
+    """Start the MCP server using the selected transport."""
+
     args = parse_args()
+    settings = get_settings()
     configure_logging(settings.log_level)
 
     if args.transport in {"sse", "streamable-http"}:
@@ -118,6 +164,7 @@ def main() -> None:
         mcp.settings.port = args.port
 
     try:
+        logger.info("Starting %s", SERVICE_NAME)
         mcp.run(transport=args.transport)
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
