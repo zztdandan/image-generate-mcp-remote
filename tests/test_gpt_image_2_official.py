@@ -69,7 +69,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
     assert captured["json"] == {
         "prompt": "draw a cat",
         "model": "gpt-image-2",
-        "size": "1024x1024",
+        "size": "1280x1280",
         "quality": "high",
         "output_format": "png",
         "background": "opaque",
@@ -128,7 +128,32 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     assert result.file_path.endswith("edited.webp")
 
 
-def test_gpt_generate_rejects_invalid_size_without_upstream_call(monkeypatch):
+def test_gpt_generate_normalizes_small_size_without_upstream_call_failure(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
+    monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
+
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["json"] = json
+        image_payload = base64.b64encode(b"small-size").decode("utf-8")
+        return DummyResponse({"created": 999, "data": [{"b64_json": image_payload}]})
+
+    monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
+
+    result = gpt_image_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="bad size",
+        save_path=str(tmp_path / "bad-size.png"),
+        size="100x100",
+    )
+
+    assert captured["json"]["size"] == "1280x1280"
+    assert result.file_path.endswith("bad-size.png")
+
+
+def test_gpt_generate_rejects_malformed_size_without_upstream_call(monkeypatch):
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
 
     def fake_post(*args, **kwargs):
@@ -143,7 +168,7 @@ def test_gpt_generate_rejects_invalid_size_without_upstream_call(monkeypatch):
                 mode=ImageToolMode.GENERATE,
                 prompt="bad size",
                 save_path="/tmp/bad-size.png",
-                size="100x100",
+                size="1024*1024",
             )
         except Exception as exc:
             raise ValidationError("gpt_image_2_official", "generate", str(exc)) from exc

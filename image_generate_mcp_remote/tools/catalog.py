@@ -50,7 +50,7 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
     return ToolCatalogEntry(
         tool_name=runtime_config.tool_name,
         tool_version=runtime_config.tool_version,
-        modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
+        modes=list(runtime_config.modes),
         protocol_style=runtime_config.protocol_style,
         default_base_url=runtime_config.default_base_url,
         effective_base_url=runtime_config.effective_base_url,
@@ -90,5 +90,6 @@ def list_image_tools_catalog(version: ToolVersion) -> ToolCatalogResponse:
         tools=[
             _entry_for(settings.gpt_image_2_official_config()),
             _entry_for(settings.nano_banana_2_official_config()),
+            _entry_for(settings.gpt_image_2_url_config()),
         ],
     )

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import base64
 import time
-from enum import StrEnum
-from typing import Literal
 
 import httpx
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
+from ..contracts.enums import ImageResponseModality, ImageThinkingLevel
+from ..contracts.image_size import ImageAspectRatio, ImageSizeTier, SIZE_AUTO, SupportedImageSize, resolve_supported_size
+from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
 from ..config import NANO_BANANA_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
@@ -19,38 +20,17 @@ from .gpt_image_2_official import _resolve_input_image
 NANO_BANANA_RESPONSE_EXCERPT_LIMIT = 400
 
 
-class ResponseModality(StrEnum):
-    TEXT = "TEXT"
-    IMAGE = "IMAGE"
+ResponseModality = ImageResponseModality
+NanoBananaAspectRatio = ImageAspectRatio
+NanoBananaImageSize = ImageSizeTier
+NanoBananaThinkingLevel = ImageThinkingLevel
 
 
-class NanoBananaAspectRatio(StrEnum):
-    SQUARE = "1:1"
-    LANDSCAPE = "16:9"
-    PORTRAIT = "9:16"
-    CLASSIC = "4:3"
-    TALL = "3:4"
-
-
-class NanoBananaImageSize(StrEnum):
-    SIZE_1K = "1K"
-    SIZE_2K = "2K"
-
-
-class NanoBananaThinkingLevel(StrEnum):
-    MINIMAL = "minimal"
-    HIGH = "High"
-
-
-class NanoBananaGenerateRequest(BaseModel):
+class NanoBananaGenerateRequest(GenerateImageRequestBase):
     """Generate mode contract for nano_banana_2_official."""
 
-    version: ToolVersion
-    mode: Literal[ImageToolMode.GENERATE]
-    prompt: str
-    save_path: str
-    model: str | None = None
-    response_modalities: list[ResponseModality] = [ResponseModality.IMAGE]
+    size: str | None = None
+    response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL
@@ -59,19 +39,16 @@ class NanoBananaGenerateRequest(BaseModel):
     @model_validator(mode="after")
     def validate_modalities(self) -> "NanoBananaGenerateRequest":
         _validate_response_modalities(self.response_modalities)
+        _apply_size_preference(self)
         return self
 
 
-class NanoBananaEditRequest(BaseModel):
+class NanoBananaEditRequest(EditImageRequestBase):
     """Edit mode contract for nano_banana_2_official."""
 
-    version: ToolVersion
-    mode: Literal[ImageToolMode.EDIT]
-    prompt: str
-    save_path: str
     input_images: list[InputImage]
-    model: str | None = None
-    response_modalities: list[ResponseModality] = [ResponseModality.IMAGE]
+    size: str | None = None
+    response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL
@@ -82,7 +59,53 @@ class NanoBananaEditRequest(BaseModel):
         _validate_response_modalities(self.response_modalities)
         if not self.input_images:
             raise ValueError("input_images must contain at least one item")
+        _apply_size_preference(self)
         return self
+
+
+class NanoBananaSizeConfig(BaseModel):
+    """Resolved size preferences for Gemini-compatible payloads."""
+
+    size: str
+    aspect_ratio: NanoBananaAspectRatio
+    image_size: NanoBananaImageSize
+
+
+def _apply_size_preference(request: NanoBananaGenerateRequest | NanoBananaEditRequest) -> None:
+    """Resolve a shared `size` input into Gemini imageConfig fields."""
+
+    if request.size is None:
+        return
+    if request.size == SIZE_AUTO:
+        request.size = None
+        return
+
+    size_config = _resolve_size_config(request.size)
+    request.size = size_config.size
+    request.aspect_ratio = size_config.aspect_ratio
+    request.image_size = size_config.image_size
+
+
+def _resolve_size_config(size: str) -> NanoBananaSizeConfig:
+    """Map a normalized size string into Nano Banana config enums."""
+
+    if size == SIZE_AUTO:
+        raise ValueError("size auto cannot be converted into Nano Banana imageConfig")
+
+    preset: SupportedImageSize = resolve_supported_size(size)
+    return NanoBananaSizeConfig(
+        size=preset.value,
+        aspect_ratio=_map_aspect_ratio(preset.aspect_ratio),
+        image_size=_map_image_size(preset.tier),
+    )
+
+
+def _map_aspect_ratio(aspect_ratio: ImageAspectRatio) -> NanoBananaAspectRatio:
+    return aspect_ratio
+
+
+def _map_image_size(size_tier: ImageSizeTier) -> NanoBananaImageSize:
+    return size_tier
 
 
 def _build_endpoint(runtime_config: ToolRuntimeConfig, model_name: str) -> str:
@@ -239,6 +262,7 @@ def nano_banana_2_official_generate(
     prompt: str,
     save_path: str,
     model: str | None = None,
+    size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
@@ -253,6 +277,7 @@ def nano_banana_2_official_generate(
         prompt=prompt,
         save_path=save_path,
         model=model,
+        size=size,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
         aspect_ratio=aspect_ratio,
         image_size=image_size,
@@ -298,6 +323,7 @@ def nano_banana_2_official_edit(
     save_path: str,
     input_images: list[InputImage],
     model: str | None = None,
+    size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
@@ -313,6 +339,7 @@ def nano_banana_2_official_edit(
         save_path=save_path,
         input_images=input_images,
         model=model,
+        size=size,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
         aspect_ratio=aspect_ratio,
         image_size=image_size,

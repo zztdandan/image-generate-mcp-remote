@@ -6,64 +6,36 @@ import base64
 import binascii
 import mimetypes
 import time
-from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Literal
 
 import httpx
 from pydantic import BaseModel, field_validator, model_validator
 
+from ..contracts.enums import ImageBackground, ImageCount, ImageModeration, ImageOutputFormat, ImageQuality
+from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
 from ..config import GPT_IMAGE_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
 from ..storage import build_image_uri, decode_base64_image, save_image_bytes_to_path
+from ..contracts.image_size import normalize_supported_size
 
 GPT_IMAGE_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_EDITS_PATH = "/images/edits"
 GPT_IMAGE_SUPPORTED_EDIT_IMAGE_MAX = 16
-GPT_IMAGE_MIN_PIXELS = 655360
-GPT_IMAGE_MAX_PIXELS = 8294400
-GPT_IMAGE_MAX_EDGE = 3840
-GPT_IMAGE_SIZE_STEP = 16
-GPT_IMAGE_MAX_ASPECT_RATIO = 3
 GPT_IMAGE_RESPONSE_EXCERPT_LIMIT = 400
 
 
-class GptImageQuality(StrEnum):
-    AUTO = "auto"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+GptImageQuality = ImageQuality
+GptImageOutputFormat = ImageOutputFormat
+GptImageBackground = ImageBackground
+GptImageModeration = ImageModeration
+GptImageCount = ImageCount
 
 
-class GptImageOutputFormat(StrEnum):
-    PNG = "png"
-    JPEG = "jpeg"
-    WEBP = "webp"
-
-
-class GptImageBackground(StrEnum):
-    AUTO = "auto"
-    OPAQUE = "opaque"
-
-
-class GptImageModeration(StrEnum):
-    AUTO = "auto"
-    LOW = "low"
-
-
-class GptImageCount(IntEnum):
-    SINGLE = 1
-
-
-class GptImageGenerateRequest(BaseModel):
+class GptImageGenerateRequest(GenerateImageRequestBase):
     """Generate mode contract for gpt_image_2_official."""
 
-    version: ToolVersion
-    mode: Literal[ImageToolMode.GENERATE]
-    prompt: str
-    save_path: str
-    model: str | None = None
     size: str | None = "auto"
     quality: GptImageQuality = GptImageQuality.AUTO
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG
@@ -86,18 +58,12 @@ class GptImageGenerateRequest(BaseModel):
     def validate_size(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        _validate_gpt_size(value)
-        return value
+        return _validate_gpt_size(value)
 
 
-class GptImageEditRequest(BaseModel):
+class GptImageEditRequest(EditImageRequestBase):
     """Edit mode contract for gpt_image_2_official."""
 
-    version: ToolVersion
-    mode: Literal[ImageToolMode.EDIT]
-    prompt: str
-    save_path: str
-    model: str | None = None
     images: list[InputImage]
     mask: InputImage | None = None
     size: str | None = "auto"
@@ -127,44 +93,13 @@ class GptImageEditRequest(BaseModel):
     def validate_size(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        _validate_gpt_size(value)
-        return value
+        return _validate_gpt_size(value)
 
 
-def _validate_gpt_size(size: str) -> None:
-    """Apply the local size validation contract from the design spec."""
+def _validate_gpt_size(size: str) -> str:
+    """Normalize any explicit size to the nearest supported preset."""
 
-    preset_sizes: set[str] = {
-        "auto",
-        "1024x1024",
-        "1536x1024",
-        "1024x1536",
-        "2048x2048",
-        "2048x1152",
-        "3840x2160",
-        "2160x3840",
-    }
-    if size in preset_sizes:
-        return
-
-    parts: list[str] = size.split("x")
-    if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
-        raise ValueError("size must use the format <width>x<height>")
-
-    width: int = int(parts[0])
-    height: int = int(parts[1])
-    if width <= 0 or height <= 0:
-        raise ValueError("width and height must be positive integers")
-    if max(width, height) > GPT_IMAGE_MAX_EDGE:
-        raise ValueError("the longest image edge must be <= 3840")
-    if width % GPT_IMAGE_SIZE_STEP != 0 or height % GPT_IMAGE_SIZE_STEP != 0:
-        raise ValueError("width and height must be divisible by 16")
-    if max(width, height) / min(width, height) > GPT_IMAGE_MAX_ASPECT_RATIO:
-        raise ValueError("image aspect ratio must be <= 3:1")
-
-    total_pixels: int = width * height
-    if total_pixels < GPT_IMAGE_MIN_PIXELS or total_pixels > GPT_IMAGE_MAX_PIXELS:
-        raise ValueError("image pixel count must stay within [655360, 8294400]")
+    return normalize_supported_size(size)
 
 
 def _mime_type_for_output(output_format: GptImageOutputFormat) -> str:

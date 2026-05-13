@@ -1,3 +1,3 @@
 """Image Generate MCP Remote package."""
 
-__version__ = "0.1.0"
+__version__ = "0.9.1"

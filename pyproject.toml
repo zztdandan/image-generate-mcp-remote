@@ -1,9 +1,10 @@
 [project]
 name = "image-generate-mcp-remote"
-version = "0.1.0"
+version = "0.9.1"
 description = "Remote MCP server for image generation"
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 dependencies = [
     "httpx>=0.28.0",
     "mcp[cli]>=1.12.0",
@@ -11,6 +12,11 @@ dependencies = [
     "pydantic-settings>=2.10.0",
     "python-dotenv>=1.1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/zztdandan/image-generate-mcp-remote"
+Repository = "https://github.com/zztdandan/image-generate-mcp-remote"
+Issues = "https://github.com/zztdandan/image-generate-mcp-remote/issues"
 
 [project.optional-dependencies]
 dev = [

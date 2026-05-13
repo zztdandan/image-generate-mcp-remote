@@ -28,6 +28,7 @@ from .tools.nano_banana_2_official import (
     nano_banana_2_official_edit,
     nano_banana_2_official_generate,
 )
+from .tools.gpt_image_2_url import gpt_image_2_url_generate
 
 logger = logging.getLogger(__name__)
 mcp = FastMCP(name="Image Generate MCP Remote")
@@ -121,6 +122,7 @@ def nano_banana_2_official(
     prompt: str,
     save_path: str,
     model: str | None = None,
+    size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
@@ -137,6 +139,7 @@ def nano_banana_2_official(
             prompt=prompt,
             save_path=save_path,
             model=model,
+            size=size,
             response_modalities=response_modalities,
             aspect_ratio=aspect_ratio,
             image_size=image_size,
@@ -150,11 +153,34 @@ def nano_banana_2_official(
         save_path=save_path,
         input_images=input_images or [],
         model=model,
+        size=size,
         response_modalities=response_modalities,
         aspect_ratio=aspect_ratio,
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
+    ).model_dump(mode="json")
+
+
+@mcp.tool(name="gpt-image-2-url", title="GPT Image 2 URL", description="Generate images via the URL-returning gateway and download the result locally")
+def gpt_image_2_url(
+    version: ToolVersion,
+    prompt: str,
+    save_path: str,
+    model: str | None = None,
+    image: list[str] | None = None,
+    size: str | None = None,
+
+) -> dict[str, object]:
+    """Expose the URL-returning image gateway as an MCP tool."""
+
+    return gpt_image_2_url_generate(
+        version=version,
+        prompt=prompt,
+        save_path=save_path,
+        model=model,
+        image=image,
+        size=size,
     ).model_dump(mode="json")
 
 

@@ -17,7 +17,7 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
     result = list_image_tools_catalog(ToolVersion.V1)
 
     assert result.service_name == "image-generate-mcp-remote"
-    assert len(result.tools) == 2
+    assert len(result.tools) == 3
     gpt_entry = next(tool for tool in result.tools if tool.tool_name == "gpt_image_2_official")
     assert gpt_entry.effective_model == "gpt-image-2-alt"
     assert gpt_entry.env_values_non_secret.supported_models == ["gpt-image-2", "gpt-image-2-alt"]
@@ -27,5 +27,9 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
 
     nano_entry = next(tool for tool in result.tools if tool.tool_name == "nano_banana_2_official")
     assert nano_entry.supported_models_effective == ["gemini-3.1-flash-image-preview", "gemini-fast"]
+
+    gpt_image_2_url_entry = next(tool for tool in result.tools if tool.tool_name == "gpt-image-2-url")
+    assert gpt_image_2_url_entry.effective_model == "gpt-image-2-vip"
+    assert gpt_image_2_url_entry.modes == ["generate"]
 
     get_settings.cache_clear()

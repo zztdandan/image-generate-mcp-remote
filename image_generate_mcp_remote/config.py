@@ -9,14 +9,15 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .models.common import ToolVersion
+from .models.common import ImageToolMode, ToolVersion
 
 load_dotenv()
 
 GPT_IMAGE_2_OFFICIAL_NAME = "gpt_image_2_official"
 NANO_BANANA_2_OFFICIAL_NAME = "nano_banana_2_official"
+GPT_IMAGE_2_URL_NAME = "gpt-image-2-url"
 SERVICE_NAME = "image-generate-mcp-remote"
-SERVICE_VERSION = "0.1.0"
+SERVICE_VERSION = "0.9.1"
 
 GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL = "https://www.uocode.com/v1"
 GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL = "gpt-image-2"
@@ -25,6 +26,10 @@ GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT = ["gpt-image-2"]
 NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL = "https://www.uocode.com"
 NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL = "gemini-3.1-flash-image-preview"
 NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT = ["gemini-3.1-flash-image-preview"]
+
+GPT_IMAGE_2_URL_DEFAULT_BASE_URL = "https://www.right.codes/draw/v1"
+GPT_IMAGE_2_URL_DEFAULT_MODEL = "gpt-image-2-vip"
+GPT_IMAGE_2_URL_SUPPORTED_MODELS_DEFAULT = ["gpt-image-2-vip"]
 
 DEFAULT_OUTPUT_DIR = Path("storage/images")
 DEFAULT_LOG_LEVEL = "INFO"
@@ -38,6 +43,11 @@ NANO_BANANA_2_OFFICIAL_API_KEY_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY"
 NANO_BANANA_2_OFFICIAL_BASE_URL_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL"
 NANO_BANANA_2_OFFICIAL_MODEL_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_MODEL"
 NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS"
+
+GPT_IMAGE_2_URL_API_KEY_ENV = "IMG_GEN_GPT_IMAGE_2_URL_API_KEY"
+GPT_IMAGE_2_URL_BASE_URL_ENV = "IMG_GEN_GPT_IMAGE_2_URL_BASE_URL"
+GPT_IMAGE_2_URL_MODEL_ENV = "IMG_GEN_GPT_IMAGE_2_URL_MODEL"
+GPT_IMAGE_2_URL_SUPPORTED_MODELS_ENV = "IMG_GEN_GPT_IMAGE_2_URL_SUPPORTED_MODELS"
 
 IMAGE_OUTPUT_DIR_ENV = "IMAGE_OUTPUT_DIR"
 IMAGE_BASE_URL_ENV = "IMAGE_BASE_URL"
@@ -59,6 +69,7 @@ class ToolRuntimeConfig(BaseModel):
 
     tool_name: str
     tool_version: ToolVersion = Field(default=ToolVersion.V1)
+    modes: list[ImageToolMode]
     protocol_style: str
     default_base_url: str
     effective_base_url: str
@@ -132,6 +143,7 @@ class Settings(BaseSettings):
         )
         return ToolRuntimeConfig(
             tool_name=GPT_IMAGE_2_OFFICIAL_NAME,
+            modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
             protocol_style="openai-images",
             default_base_url=GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL,
             effective_base_url=self.gpt_image_2_official_base_url or GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL,
@@ -164,6 +176,7 @@ class Settings(BaseSettings):
         )
         return ToolRuntimeConfig(
             tool_name=NANO_BANANA_2_OFFICIAL_NAME,
+            modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
             protocol_style="gemini-generate-content",
             default_base_url=NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL,
             effective_base_url=self.nano_banana_2_official_base_url or NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL,
@@ -181,6 +194,47 @@ class Settings(BaseSettings):
                 base_url=NANO_BANANA_2_OFFICIAL_BASE_URL_ENV,
                 model=NANO_BANANA_2_OFFICIAL_MODEL_ENV,
                 supported_models=NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_ENV,
+            ),
+        )
+
+    gpt_image_2_url_api_key: str = Field(default="", alias=GPT_IMAGE_2_URL_API_KEY_ENV)
+    gpt_image_2_url_base_url: str | None = Field(default=None, alias=GPT_IMAGE_2_URL_BASE_URL_ENV)
+    gpt_image_2_url_model: str | None = Field(default=None, alias=GPT_IMAGE_2_URL_MODEL_ENV)
+    gpt_image_2_url_supported_models_raw: str | None = Field(
+        default=None,
+        alias=GPT_IMAGE_2_URL_SUPPORTED_MODELS_ENV,
+    )
+
+    def gpt_image_2_url_config(self) -> ToolRuntimeConfig:
+        """Build effective config for the URL-returning gpt-image-2 gateway."""
+
+        supported_models, source = _parse_supported_models(
+            self.gpt_image_2_url_supported_models_raw,
+            GPT_IMAGE_2_URL_SUPPORTED_MODELS_ENV,
+        )
+        effective_supported_models: list[str] = (
+            supported_models if supported_models else list(GPT_IMAGE_2_URL_SUPPORTED_MODELS_DEFAULT)
+        )
+        return ToolRuntimeConfig(
+            tool_name=GPT_IMAGE_2_URL_NAME,
+            modes=[ImageToolMode.GENERATE],
+            protocol_style="gpt-image-2-url-generations",
+            default_base_url=GPT_IMAGE_2_URL_DEFAULT_BASE_URL,
+            effective_base_url=self.gpt_image_2_url_base_url or GPT_IMAGE_2_URL_DEFAULT_BASE_URL,
+            base_url_source="env" if self.gpt_image_2_url_base_url else "default",
+            default_model=GPT_IMAGE_2_URL_DEFAULT_MODEL,
+            effective_model=self.gpt_image_2_url_model or GPT_IMAGE_2_URL_DEFAULT_MODEL,
+            model_source="env" if self.gpt_image_2_url_model else "default",
+            supported_models_default=list(GPT_IMAGE_2_URL_SUPPORTED_MODELS_DEFAULT),
+            supported_models_effective=effective_supported_models,
+            supported_models_source=source,
+            api_key=self.gpt_image_2_url_api_key,
+            api_key_configured=bool(self.gpt_image_2_url_api_key),
+            env_names=ToolEnvironmentNames(
+                api_key=GPT_IMAGE_2_URL_API_KEY_ENV,
+                base_url=GPT_IMAGE_2_URL_BASE_URL_ENV,
+                model=GPT_IMAGE_2_URL_MODEL_ENV,
+                supported_models=GPT_IMAGE_2_URL_SUPPORTED_MODELS_ENV,
             ),
         )
 
