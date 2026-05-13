@@ -258,7 +258,8 @@ uv run pytest
 
 - GitHub Release：创建如 `v0.9.1` 的 release 后，会自动触发 `.github/workflows/release.yml`
 - PyPI 发布：工作流使用 `uv build --no-sources` 与 `uv publish`
-- Trusted Publishing：建议在 `PyPI` 中为仓库 `zztdandan/image-generate-mcp-remote` 配置 GitHub Actions trusted publisher，并将 workflow 文件名填写为 `.github/workflows/release.yml`
+- Trusted Publishing：建议在 `PyPI` 中为仓库 `zztdandan/image-generate-mcp-remote` 配置 GitHub Actions trusted publisher，并将 workflow 文件名填写为 `.github/workflows/release.yml`、environment 填写 `pypi`
+- Token 回退方案：若暂不使用 Trusted Publishing，可在 GitHub 仓库 secrets 中配置 `UV_PUBLISH_TOKEN`，同一工作流会自动读取并发布
 
 ## 许可证
 
