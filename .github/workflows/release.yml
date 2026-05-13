@@ -44,7 +44,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
 
-      - name: Publish distributions to PyPI
+      - name: Publish distributions to PyPI with token
+        if: ${{ secrets.UV_PUBLISH_TOKEN != '' }}
         env:
           UV_PUBLISH_TOKEN: ${{ secrets.UV_PUBLISH_TOKEN }}
+        run: uv publish
+
+      - name: Publish distributions to PyPI with trusted publishing
+        if: ${{ secrets.UV_PUBLISH_TOKEN == '' }}
         run: uv publish
