@@ -14,13 +14,13 @@
 - 提供 `gpt-image-2-url` 工具，兼容 `https://www.right.codes/draw/v1/images/generations` 并自动下载返回图片 URL
 - 提供 `list_image_tools_catalog` 工具，用于输出当前服务的默认配置、有效模型与非敏感环境变量信息
 - 提供 `skills/gpt-icon-generate/SKILL.md` 图标生成技能，约定规则网格图标板生成、校验和切图流程
-- 默认网关已切换到 `uocode`
+- 默认 `official` 工具网关已切换为官方地址
 
 ## 默认上游配置
 
 ### OpenAI Images 兼容
 
-- 默认 `BASE_URL`：`https://www.uocode.com/v1`
+- 默认 `BASE_URL`：`https://api.openai.com/v1`
 - 默认模型：`gpt-image-2`
 - 典型接口：
   - `POST /v1/images/generations`
@@ -28,7 +28,7 @@
 
 ### Gemini 原生兼容
 
-- 默认 `BASE_URL`：`https://www.uocode.com`
+- 默认 `BASE_URL`：`https://generativelanguage.googleapis.com`
 - 默认模型：`gemini-3.1-flash-image-preview`
 - 典型接口：
   - `POST /v1beta/models/{model}:generateContent`
@@ -40,21 +40,17 @@
 当前发布链路会把 GitHub Release 对应版本自动发布到 `PyPI`。
 
 - PyPI 项目名：`image-generate-mcp-remote`
-- 推荐临时运行：`uvx image-generate-mcp-remote --transport stdio`
 - 推荐安装到工具目录：`uv tool install image-generate-mcp-remote`
+- 推荐阅读真实部署与 MCP 配置导览：`./SYSTEMD_DEPLOYMENT_GUIDE.md`
 
-例如，安装 `v0.9.4` 后可直接这样使用：
+例如，安装 `v0.9.4` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
 
 ```bash
-# 临时运行，不落本地项目源码
-uvx image-generate-mcp-remote --transport stdio
-
-# 或安装为全局工具
+# 安装为全局工具
 uv tool install image-generate-mcp-remote
-image-generate-mcp-remote --transport stdio
 
 # 指定版本
-uvx --from image-generate-mcp-remote==0.9.4 image-generate-mcp-remote --transport stdio
+uv tool install --refresh image-generate-mcp-remote==0.9.4
 ```
 
 ## 从源码安装与启动
@@ -81,10 +77,9 @@ uv run image-generate-mcp-remote --transport streamable-http --host 127.0.0.1 --
 
 # SSE
 uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
-
-# stdio（本地 MCP 客户端直连）
-uv run image-generate-mcp-remote --transport stdio
 ```
+
+这里不再单列 `stdio` 的独立启动命令；对本项目而言，`stdio` 的意义在于由 MCP 客户端按配置拉起，而不是人工单独启动。真正的 MCP 配置导览请直接看 `./SYSTEMD_DEPLOYMENT_GUIDE.md`。
 
 ## 当前实际部署（systemd --user）
 
@@ -98,7 +93,7 @@ uv run image-generate-mcp-remote --transport stdio
 
 部署、更新、修改环境变量、重启服务、OpenCode MCP JSON 配置的完整说明见：
 
-- `SYSTEMD_DEPLOYMENT_GUIDE.md`
+- `./SYSTEMD_DEPLOYMENT_GUIDE.md`
 
 对于当前这个远端服务，需要特别注意：
 
@@ -110,6 +105,8 @@ uv run image-generate-mcp-remote --transport stdio
 ## MCP 配置方式
 
 以下配置示例均为当前项目可直接使用的正确写法。
+
+如果你关注的是真实远端部署、systemd 托管、客户端如何接入在线 MCP 服务，建议优先阅读 `./SYSTEMD_DEPLOYMENT_GUIDE.md`；本节仅保留最常见配置摘要。
 
 ### 方式一：stdio 直连（推荐本地开发）
 
@@ -130,16 +127,16 @@ uv run image-generate-mcp-remote --transport stdio
       "cwd": "/absolute/path/to/image-generate-mcp-remote",
       "env": {
         "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY": "sk-xxxx",
-        "IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL": "https://www.uocode.com/v1",
+        "IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL": "https://api.openai.com/v1",
         "IMG_GEN_GPT_IMAGE_2_OFFICIAL_MODEL": "gpt-image-2",
         "IMG_GEN_GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS": "gpt-image-2",
         "IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY": "sk-xxxx",
-        "IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL": "https://www.uocode.com",
+        "IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL": "https://generativelanguage.googleapis.com",
         "IMG_GEN_NANO_BANANA_2_OFFICIAL_MODEL": "gemini-3.1-flash-image-preview",
         "IMG_GEN_NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS": "gemini-3.1-flash-image-preview",
         "IMAGE_OUTPUT_DIR": "storage/images",
         "IMAGE_BASE_URL": "",
-        "IMAGE_HTTP_TIMEOUT_SECONDS": "600",
+        "IMAGE_HTTP_TIMEOUT_SECONDS": "180",
         "LOG_LEVEL": "INFO"
       }
     }
@@ -207,7 +204,7 @@ OpenAI Images 兼容工具。
 
 - `mode=generate` 时调用文生图
 - `mode=edit` 时调用参考图编辑 / 图生图
-- 默认请求上游：`https://www.uocode.com/v1`
+- 默认请求上游：`https://api.openai.com/v1`
 - 支持显式传入 `timeout_seconds`，默认 `180` 秒
 - 支持显式传入 `retry_count`，默认 `3`，表示失败后额外重试 3 次，总尝试次数为 4 次
 - 若传入 `size="宽x高"`，服务会自动归一化到支持的 30 档常用尺寸后再请求上游
@@ -219,7 +216,7 @@ Gemini `generateContent` 兼容工具。
 
 - `mode=generate` 时调用文生图
 - `mode=edit` 时调用参考图编辑 / 图生图
-- 默认请求上游：`https://www.uocode.com`
+- 默认请求上游：`https://generativelanguage.googleapis.com`
 - 支持显式传入 `timeout_seconds`，默认 `180` 秒
 - 支持显式传入 `retry_count`，默认 `3`，表示失败后额外重试 3 次，总尝试次数为 4 次
 
@@ -254,7 +251,7 @@ URL 返回型 `gpt-image-2` 独立工具。
 | 变量名 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY` | 是 | 空 | `gpt_image_2_official` 使用的 API Key |
-| `IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL` | 否 | `https://www.uocode.com/v1` | OpenAI Images 兼容网关地址 |
+| `IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL` | 否 | `https://api.openai.com/v1` | OpenAI Images 官方兼容网关地址 |
 | `IMG_GEN_GPT_IMAGE_2_OFFICIAL_MODEL` | 否 | `gpt-image-2` | 默认调用模型 |
 | `IMG_GEN_GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS` | 否 | `gpt-image-2` | 允许调用的模型白名单，逗号分隔 |
 
@@ -263,7 +260,7 @@ URL 返回型 `gpt-image-2` 独立工具。
 | 变量名 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY` | 是 | 空 | `nano_banana_2_official` 使用的 API Key |
-| `IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL` | 否 | `https://www.uocode.com` | Gemini 原生兼容网关地址 |
+| `IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL` | 否 | `https://generativelanguage.googleapis.com` | Gemini 官方兼容网关地址 |
 | `IMG_GEN_NANO_BANANA_2_OFFICIAL_MODEL` | 否 | `gemini-3.1-flash-image-preview` | 默认调用模型 |
 | `IMG_GEN_NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS` | 否 | `gemini-3.1-flash-image-preview` | 允许调用的模型白名单，逗号分隔 |
 
@@ -285,18 +282,6 @@ URL 返回型 `gpt-image-2` 独立工具。
 | `IMG_GEN_GPT_IMAGE_2_URL_MODEL` | 否 | `gpt-image-2-vip` | 默认调用模型 |
 | `IMG_GEN_GPT_IMAGE_2_URL_SUPPORTED_MODELS` | 否 | `gpt-image-2-vip` | 允许调用的模型白名单，逗号分隔 |
 
-## 调试与验证
-
-```bash
-uv run pytest
-```
-
-## 发布说明
-
-- GitHub Release：创建如 `v0.9.4` 的 release 后，会自动触发 `.github/workflows/release.yml`
-- PyPI 发布：工作流使用 `uv build --no-sources` 与 `uv publish`
-- Trusted Publishing：建议在 `PyPI` 中为仓库 `zztdandan/image-generate-mcp-remote` 配置 GitHub Actions trusted publisher，并将 workflow 文件名填写为 `release.yml`、environment 填写 `pypi`
-- Token 回退方案：若暂不使用 Trusted Publishing，可在 GitHub 仓库 secrets 中配置 `UV_PUBLISH_TOKEN`，同一工作流会自动读取并发布
 
 ## 许可证
 

@@ -71,7 +71,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
         timeout_seconds=45,
     )
 
-    assert captured["url"] == "https://www.uocode.com/v1/images/generations"
+    assert captured["url"] == "https://api.openai.com/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer secret-key"}
     assert captured["json"] == {
         "prompt": "draw a cat",
@@ -128,7 +128,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
         output_format=GptImageOutputFormat.WEBP,
     )
 
-    assert captured["url"] == "https://www.uocode.com/v1/images/edits"
+    assert captured["url"] == "https://api.openai.com/v1/images/edits"
     assert captured["data"]["prompt"] == "edit this"
     assert captured["data"]["output_format"] == "webp"
     assert captured["files"][0][0] == "image[]"
