@@ -177,12 +177,14 @@ journalctl --user -u image-generate-mcp.service -n 100 --no-pager
 {
   "mcpServers": {
     "image-generate-mcp-remote": {
-      "url": "http://127.0.0.1:25235/mcp"
+      "url": "http://127.0.0.1:25235/mcp",
+      "timeout": 500000
     }
   }
 }
 ```
-
+注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。
+文档推荐值为 `500000` 毫秒（500 秒），符合常规重试时间；同时可在说明中补充极端情况下最长可能达到 12 分钟。
 如果服务对外监听并通过其他域名或 IP 暴露，把上面的 `url` 改成实际可访问地址即可。
 
 ### 8.2 本地 `stdio`
@@ -198,6 +200,7 @@ journalctl --user -u image-generate-mcp.service -n 100 --no-pager
         "--transport",
         "stdio"
       ],
+      "timeout": 500000,
       "cwd": "/absolute/path/to/image-generate-mcp-remote",
       "env": {
         "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY": "sk-xxxx",
@@ -213,7 +216,8 @@ journalctl --user -u image-generate-mcp.service -n 100 --no-pager
 ```
 
 注意：只有 `stdio` 这种客户端拉起进程的模式，`env` 才会直接生效到服务进程。
-生图调用耗时较长，`IMAGE_HTTP_TIMEOUT_SECONDS` 只控制本服务请求上游生图接口及下载图片的 HTTP 超时；如果客户端支持 MCP tool-call 超时配置，也应调到至少 `360` 秒，避免客户端先返回 `Request timed out`。
+注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。
+生图调用耗时较长，`IMAGE_HTTP_TIMEOUT_SECONDS` 只控制本服务请求上游生图接口及下载图片的 HTTP 超时；如果客户端支持 MCP tool-call 超时配置，文档推荐显式配置为 `500000` 毫秒（500 秒），避免默认 `30` 秒过早超时；同时也应知道渠道极不稳定时最长可能接近 `12` 分钟。
 
 ## 9. 常见问题
 

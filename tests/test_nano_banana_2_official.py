@@ -1,6 +1,7 @@
 import base64
 from pathlib import Path
 
+import httpx
 import pytest
 
 from image_generate_mcp_remote.config import get_settings
@@ -47,6 +48,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
         captured["url"] = url
         captured["headers"] = headers
         captured["json"] = json
+        captured["timeout"] = timeout
         image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse(
             {
@@ -64,6 +66,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
         save_path=str(tmp_path / "nano.png"),
         size="1024x1024",
         response_modalities=[ResponseModality.IMAGE],
+        timeout_seconds=75,
     )
 
     assert captured["url"] == "https://www.uocode.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
@@ -71,6 +74,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert captured["json"]["contents"] == [{"parts": [{"text": "make a fox"}]}]
     assert captured["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "1:1", "imageSize": "1K"}
+    assert captured["timeout"] == 75
     assert Path(result.file_path).exists()
     assert result.file_path.endswith("nano.png")
     assert result.elapsed_seconds >= 0
@@ -87,6 +91,7 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
 
     def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
         captured["json"] = json
+        captured["timeout"] = timeout
         image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse(
             {
@@ -120,6 +125,7 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
     assert parts[0] == {"text": "add a hat"}
     assert "inlineData" in parts[1]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "21:9", "imageSize": "4K"}
+    assert captured["timeout"] == 180
     assert result.mime_type == "image/jpeg"
     assert result.text_output == "done"
     assert result.file_path.endswith("nano-edit.jpg")
@@ -153,3 +159,35 @@ def test_nano_rejects_malformed_size_with_supported_size_list(monkeypatch):
             response_modalities=[ResponseModality.IMAGE],
         )
     assert "1280x1280 (1K, 1:1)" in str(exc_info.value)
+
+
+def test_nano_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "secret-key")
+    calls = {"post": 0}
+
+    def flaky_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        calls["post"] += 1
+        if calls["post"] < 4:
+            raise httpx.RequestError("flaky network")
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse(
+            {
+                "responseId": "resp-retry",
+                "candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "image/png", "data": image_payload}}]}}],
+            }
+        )
+
+    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", flaky_post)
+
+    result = nano_banana_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="retry nano",
+        save_path=str(tmp_path / "nano-retry.png"),
+        response_modalities=[ResponseModality.IMAGE],
+        retry_count=3,
+    )
+
+    assert calls["post"] == 4
+    assert result.file_path.endswith("nano-retry.png")

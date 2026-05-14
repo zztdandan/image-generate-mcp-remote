@@ -1,6 +1,7 @@
 import base64
 from pathlib import Path
 
+import httpx
 import pytest
 
 from image_generate_mcp_remote.config import get_settings
@@ -67,6 +68,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
         output_format=GptImageOutputFormat.PNG,
         background=GptImageBackground.OPAQUE,
         n=GptImageCount.SINGLE,
+        timeout_seconds=45,
     )
 
     assert captured["url"] == "https://www.uocode.com/v1/images/generations"
@@ -88,6 +90,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
     assert result.elapsed_seconds >= 0
     assert result.width == 1
     assert result.height == 1
+    assert captured["timeout"] == 45
 
 
 def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path):
@@ -131,6 +134,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     assert captured["files"][0][0] == "image[]"
     assert captured["files"][0][1][0] == "input.png"
     assert captured["files"][1][0] == "mask"
+    assert captured["timeout"] == 180
     assert result.mime_type == "image/webp"
     assert result.file_path.endswith("edited.webp")
     assert result.width == 1
@@ -160,6 +164,32 @@ def test_gpt_generate_normalizes_small_size_without_upstream_call_failure(monkey
 
     assert captured["json"]["size"] == "1280x1280"
     assert result.file_path.endswith("bad-size.png")
+
+
+def test_gpt_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
+    calls = {"post": 0}
+
+    def flaky_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        calls["post"] += 1
+        if calls["post"] < 4:
+            raise httpx.RequestError("flaky network")
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse({"created": 123, "data": [{"b64_json": image_payload}]})
+
+    monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", flaky_post)
+
+    result = gpt_image_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="retry",
+        save_path=str(tmp_path / "retry.png"),
+        retry_count=3,
+    )
+
+    assert calls["post"] == 4
+    assert result.file_path.endswith("retry.png")
 
 
 def test_gpt_generate_rejects_malformed_size_without_upstream_call(monkeypatch):

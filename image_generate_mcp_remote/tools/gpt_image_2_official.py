@@ -14,7 +14,13 @@ from pydantic import field_validator, model_validator
 
 from ..contracts.enums import ImageBackground, ImageCount, ImageModeration, ImageOutputFormat, ImageQuality
 from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
-from ..config import GPT_IMAGE_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
+from ..config import (
+    DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    DEFAULT_TOOL_RETRY_COUNT,
+    GPT_IMAGE_2_OFFICIAL_NAME,
+    ToolRuntimeConfig,
+    get_settings,
+)
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
 from ..storage import build_image_uri, decode_base64_image, require_image_dimensions, save_image_bytes_to_path
@@ -24,6 +30,7 @@ GPT_IMAGE_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_EDITS_PATH = "/images/edits"
 GPT_IMAGE_SUPPORTED_EDIT_IMAGE_MAX = 16
 GPT_IMAGE_RESPONSE_EXCERPT_LIMIT = 400
+RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
 
 
 GptImageQuality = ImageQuality
@@ -237,6 +244,38 @@ def _handle_upstream_response(mode: ImageToolMode, response: httpx.Response) -> 
     return payload
 
 
+def _post_generate_once(
+    runtime_config: ToolRuntimeConfig,
+    payload: dict[str, str | int],
+    timeout_seconds: float,
+) -> httpx.Response:
+    """Send one generate request to the upstream image endpoint."""
+
+    return httpx.post(
+        _build_endpoint(runtime_config.effective_base_url, GPT_IMAGE_GENERATIONS_PATH),
+        headers=_build_headers(runtime_config),
+        json=payload,
+        timeout=timeout_seconds,
+    )
+
+
+def _post_edit_once(
+    runtime_config: ToolRuntimeConfig,
+    form_data: dict[str, str],
+    multipart_files: list[tuple[str, tuple[str, bytes, str]]],
+    timeout_seconds: float,
+) -> httpx.Response:
+    """Send one edit request to the upstream image endpoint."""
+
+    return httpx.post(
+        _build_endpoint(runtime_config.effective_base_url, GPT_IMAGE_EDITS_PATH),
+        headers=_build_headers(runtime_config),
+        data=form_data,
+        files=multipart_files,
+        timeout=timeout_seconds,
+    )
+
+
 def gpt_image_2_official_generate(
     version: ToolVersion,
     mode: Literal[ImageToolMode.GENERATE],
@@ -250,6 +289,8 @@ def gpt_image_2_official_generate(
     background: GptImageBackground = GptImageBackground.AUTO,
     moderation: GptImageModeration = GptImageModeration.AUTO,
     n: GptImageCount = GptImageCount.SINGLE,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
     """Run the generate mode for gpt_image_2_official."""
 
@@ -266,6 +307,8 @@ def gpt_image_2_official_generate(
         background=background,
         moderation=moderation,
         n=n,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     )
     runtime_config = get_settings().gpt_image_2_official_config()
     if request.model and request.model not in runtime_config.supported_models_effective:
@@ -285,15 +328,25 @@ def gpt_image_2_official_generate(
     if request.output_compression is not None:
         payload["output_compression"] = request.output_compression
 
+    total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
     started_at: float = time.perf_counter()
-    response = httpx.post(
-        _build_endpoint(runtime_config.effective_base_url, GPT_IMAGE_GENERATIONS_PATH),
-        headers=_build_headers(runtime_config),
-        json=payload,
-        timeout=get_settings().image_http_timeout_seconds,
-    )
+    last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
+    response_json: dict[str, object] | None = None
+    for attempt in range(1, total_attempts + 1):
+        try:
+            response = _post_generate_once(runtime_config, payload, request.timeout_seconds)
+            response_json = _handle_upstream_response(request.mode, response)
+            break
+        except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
+            last_error = exc
+            if attempt == total_attempts:
+                raise
+
+    if response_json is None:
+        assert last_error is not None
+        raise last_error
+
     elapsed_seconds: float = time.perf_counter() - started_at
-    response_json = _handle_upstream_response(request.mode, response)
     return _parse_image_response(
         request.mode,
         response_json,
@@ -317,6 +370,8 @@ def gpt_image_2_official_edit(
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
     output_compression: int | None = None,
     background: GptImageBackground = GptImageBackground.AUTO,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
     """Run the edit mode for gpt_image_2_official."""
 
@@ -333,6 +388,8 @@ def gpt_image_2_official_edit(
         output_format=output_format,
         output_compression=output_compression,
         background=background,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     )
     runtime_config = get_settings().gpt_image_2_official_config()
     if request.model and request.model not in runtime_config.supported_models_effective:
@@ -360,16 +417,25 @@ def gpt_image_2_official_edit(
         resolved_mask = _resolve_input_image(request.mask)
         multipart_files.append(("mask", (resolved_mask.filename, resolved_mask.data, resolved_mask.mime_type)))
 
+    total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
     started_at: float = time.perf_counter()
-    response = httpx.post(
-        _build_endpoint(runtime_config.effective_base_url, GPT_IMAGE_EDITS_PATH),
-        headers=_build_headers(runtime_config),
-        data=form_data,
-        files=multipart_files,
-        timeout=get_settings().image_http_timeout_seconds,
-    )
+    last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
+    response_json: dict[str, object] | None = None
+    for attempt in range(1, total_attempts + 1):
+        try:
+            response = _post_edit_once(runtime_config, form_data, multipart_files, request.timeout_seconds)
+            response_json = _handle_upstream_response(request.mode, response)
+            break
+        except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
+            last_error = exc
+            if attempt == total_attempts:
+                raise
+
+    if response_json is None:
+        assert last_error is not None
+        raise last_error
+
     elapsed_seconds: float = time.perf_counter() - started_at
-    response_json = _handle_upstream_response(request.mode, response)
     return _parse_image_response(
         request.mode,
         response_json,

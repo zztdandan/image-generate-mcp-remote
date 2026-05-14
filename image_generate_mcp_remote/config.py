@@ -33,6 +33,8 @@ GPT_IMAGE_2_URL_SUPPORTED_MODELS_DEFAULT = ["gpt-image-2-vip"]
 
 DEFAULT_OUTPUT_DIR = Path("storage/images")
 DEFAULT_LOG_LEVEL = "INFO"
+DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 180.0
+DEFAULT_TOOL_RETRY_COUNT = 3
 
 GPT_IMAGE_2_OFFICIAL_API_KEY_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY"
 GPT_IMAGE_2_OFFICIAL_BASE_URL_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL"
@@ -105,7 +107,7 @@ class Settings(BaseSettings):
 
     image_output_dir: Path = Field(default=DEFAULT_OUTPUT_DIR, alias=IMAGE_OUTPUT_DIR_ENV)
     image_base_url: str = Field(default="", alias=IMAGE_BASE_URL_ENV)
-    image_http_timeout_seconds: float = Field(default=600.0, alias=IMAGE_HTTP_TIMEOUT_SECONDS_ENV)
+    image_http_timeout_seconds: float = Field(default=DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, alias=IMAGE_HTTP_TIMEOUT_SECONDS_ENV)
     log_level: str = Field(default=DEFAULT_LOG_LEVEL, alias=LOG_LEVEL_ENV)
 
     gpt_image_2_official_api_key: str = Field(default="", alias=GPT_IMAGE_2_OFFICIAL_API_KEY_ENV)

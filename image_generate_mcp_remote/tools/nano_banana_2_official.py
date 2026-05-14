@@ -12,13 +12,20 @@ from pydantic import BaseModel, Field, model_validator
 from ..contracts.enums import ImageResponseModality, ImageThinkingLevel
 from ..contracts.image_size import ImageAspectRatio, ImageSizeTier, SIZE_AUTO, SupportedImageSize, resolve_supported_size
 from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
-from ..config import NANO_BANANA_2_OFFICIAL_NAME, ToolRuntimeConfig, get_settings
+from ..config import (
+    DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    DEFAULT_TOOL_RETRY_COUNT,
+    NANO_BANANA_2_OFFICIAL_NAME,
+    ToolRuntimeConfig,
+    get_settings,
+)
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
 from ..storage import build_image_uri, require_image_dimensions, save_image_bytes_to_path
 from .gpt_image_2_official import _resolve_input_image
 
 NANO_BANANA_RESPONSE_EXCERPT_LIMIT = 400
+RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
 
 
 ResponseModality = ImageResponseModality
@@ -260,6 +267,22 @@ def _handle_upstream_response(mode: ImageToolMode, response: httpx.Response) -> 
     return payload
 
 
+def _post_generate_once(
+    runtime_config: ToolRuntimeConfig,
+    provider_model: str,
+    payload: dict[str, object],
+    timeout_seconds: float,
+) -> httpx.Response:
+    """Send one generateContent request to the upstream Gemini endpoint."""
+
+    return httpx.post(
+        _build_endpoint(runtime_config, provider_model),
+        headers=_build_headers(runtime_config),
+        json=payload,
+        timeout=timeout_seconds,
+    )
+
+
 def nano_banana_2_official_generate(
     version: ToolVersion,
     mode: Literal[ImageToolMode.GENERATE],
@@ -272,6 +295,8 @@ def nano_banana_2_official_generate(
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
     """Run the generate mode for nano_banana_2_official."""
 
@@ -287,29 +312,42 @@ def nano_banana_2_official_generate(
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     )
     runtime_config = get_settings().nano_banana_2_official_config()
     provider_model: str = request.model or runtime_config.effective_model
     if provider_model not in runtime_config.supported_models_effective:
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
-    started_at: float = time.perf_counter()
-    response = httpx.post(
-        _build_endpoint(runtime_config, provider_model),
-        headers=_build_headers(runtime_config),
-        json=_payload(
-            prompt=request.prompt,
-            response_modalities=request.response_modalities,
-            aspect_ratio=request.aspect_ratio,
-            image_size=request.image_size,
-            thinking_level=request.thinking_level,
-            include_thoughts=request.include_thoughts,
-            inline_images=[],
-        ),
-        timeout=get_settings().image_http_timeout_seconds,
+    total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
+    request_payload: dict[str, object] = _payload(
+        prompt=request.prompt,
+        response_modalities=request.response_modalities,
+        aspect_ratio=request.aspect_ratio,
+        image_size=request.image_size,
+        thinking_level=request.thinking_level,
+        include_thoughts=request.include_thoughts,
+        inline_images=[],
     )
+    started_at: float = time.perf_counter()
+    last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
+    response_json: dict[str, object] | None = None
+    for attempt in range(1, total_attempts + 1):
+        try:
+            response = _post_generate_once(runtime_config, provider_model, request_payload, request.timeout_seconds)
+            response_json = _handle_upstream_response(request.mode, response)
+            break
+        except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
+            last_error = exc
+            if attempt == total_attempts:
+                raise
+
+    if response_json is None:
+        assert last_error is not None
+        raise last_error
+
     elapsed_seconds: float = time.perf_counter() - started_at
-    response_json = _handle_upstream_response(request.mode, response)
     return _parse_response(
         request.mode,
         response_json,
@@ -333,6 +371,8 @@ def nano_banana_2_official_edit(
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
     """Run the edit mode for nano_banana_2_official."""
 
@@ -349,6 +389,8 @@ def nano_banana_2_official_edit(
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     )
     runtime_config = get_settings().nano_banana_2_official_config()
     provider_model: str = request.model or runtime_config.effective_model
@@ -356,23 +398,34 @@ def nano_banana_2_official_edit(
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
     resolved_images: list[ResolvedInputImage] = [_resolve_input_image(image) for image in request.input_images]
-    started_at: float = time.perf_counter()
-    response = httpx.post(
-        _build_endpoint(runtime_config, provider_model),
-        headers=_build_headers(runtime_config),
-        json=_payload(
-            prompt=request.prompt,
-            response_modalities=request.response_modalities,
-            aspect_ratio=request.aspect_ratio,
-            image_size=request.image_size,
-            thinking_level=request.thinking_level,
-            include_thoughts=request.include_thoughts,
-            inline_images=resolved_images,
-        ),
-        timeout=get_settings().image_http_timeout_seconds,
+    total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
+    request_payload: dict[str, object] = _payload(
+        prompt=request.prompt,
+        response_modalities=request.response_modalities,
+        aspect_ratio=request.aspect_ratio,
+        image_size=request.image_size,
+        thinking_level=request.thinking_level,
+        include_thoughts=request.include_thoughts,
+        inline_images=resolved_images,
     )
+    started_at: float = time.perf_counter()
+    last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
+    response_json: dict[str, object] | None = None
+    for attempt in range(1, total_attempts + 1):
+        try:
+            response = _post_generate_once(runtime_config, provider_model, request_payload, request.timeout_seconds)
+            response_json = _handle_upstream_response(request.mode, response)
+            break
+        except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
+            last_error = exc
+            if attempt == total_attempts:
+                raise
+
+    if response_json is None:
+        assert last_error is not None
+        raise last_error
+
     elapsed_seconds: float = time.perf_counter() - started_at
-    response_json = _handle_upstream_response(request.mode, response)
     return _parse_response(
         request.mode,
         response_json,

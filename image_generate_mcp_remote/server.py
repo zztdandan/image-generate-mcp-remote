@@ -8,7 +8,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from .config import SERVICE_NAME, get_settings
+from .config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, DEFAULT_TOOL_RETRY_COUNT, SERVICE_NAME, get_settings
 from .models.common import ImageToolMode, InputImage, ToolVersion
 from .tools.catalog import list_image_tools_catalog
 from .tools.gpt_image_2_official import (
@@ -86,6 +86,8 @@ def gpt_image_2_official(
     background: GptImageBackground = GptImageBackground.AUTO,
     moderation: GptImageModeration = GptImageModeration.AUTO,
     n: GptImageCount = GptImageCount.SINGLE,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
     images: list[InputImage] | None = None,
     mask: InputImage | None = None,
 ) -> dict[str, object]:
@@ -105,6 +107,8 @@ def gpt_image_2_official(
             background=background,
             moderation=moderation,
             n=n,
+            timeout_seconds=timeout_seconds,
+            retry_count=retry_count,
         ).model_dump(mode="json")
     return gpt_image_2_official_edit(
         version=version,
@@ -119,6 +123,8 @@ def gpt_image_2_official(
         output_format=output_format,
         output_compression=output_compression,
         background=background,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     ).model_dump(mode="json")
 
 
@@ -142,6 +148,8 @@ def nano_banana_2_official(
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
     input_images: list[InputImage] | None = None,
 ) -> dict[str, object]:
     """Expose generate/edit behavior behind one product-level tool."""
@@ -159,6 +167,8 @@ def nano_banana_2_official(
             image_size=image_size,
             thinking_level=thinking_level,
             include_thoughts=include_thoughts,
+            timeout_seconds=timeout_seconds,
+            retry_count=retry_count,
         ).model_dump(mode="json")
     return nano_banana_2_official_edit(
         version=version,
@@ -173,6 +183,8 @@ def nano_banana_2_official(
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     ).model_dump(mode="json")
 
 
@@ -195,6 +207,8 @@ def gpt_image_2_url(
     model: str | None = None,
     image: list[str] | None = None,
     size: str | None = None,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 
 ) -> dict[str, object]:
     """Expose the URL-returning image gateway as an MCP tool."""
@@ -206,6 +220,8 @@ def gpt_image_2_url(
         model=model,
         image=image,
         size=size,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     ).model_dump(mode="json")
 
 

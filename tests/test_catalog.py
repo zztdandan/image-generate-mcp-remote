@@ -23,7 +23,7 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
     assert gpt_entry.env_values_non_secret.supported_models == ["gpt-image-2", "gpt-image-2-alt"]
     assert gpt_entry.env_values_non_secret.output_dir == str(tmp_path / "images")
     assert gpt_entry.env_values_non_secret.image_base_url == "https://cdn.example.com/assets"
-    assert gpt_entry.env_values_non_secret.image_http_timeout_seconds == 600
+    assert gpt_entry.env_values_non_secret.image_http_timeout_seconds == 180
     assert "1280x1280 (1K, 1:1)" in gpt_entry.supported_size_presets
     assert gpt_entry.api_key_configured is True
 

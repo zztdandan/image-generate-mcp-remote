@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from ..config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, DEFAULT_TOOL_RETRY_COUNT
 from ..models.common import ImageToolMode, ToolVersion
 
 
@@ -17,6 +18,8 @@ class PromptedImageRequestBase(BaseModel):
     save_path: str
     model: str | None = None
     size: str | None = None
+    timeout_seconds: float = Field(default=DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, ge=1.0)
+    retry_count: int = Field(default=DEFAULT_TOOL_RETRY_COUNT, ge=0)
 
 
 class GenerateImageRequestBase(PromptedImageRequestBase):

@@ -89,6 +89,7 @@ def test_gpt_image_2_url_generates_then_downloads(monkeypatch, tmp_path: Path):
         model="gpt-image-2-vip",
         image=["https://example.com/ref.png"],
         size=_size_value(ImageSizeTier.SIZE_4K, ImageAspectRatio.WIDE_16_9),
+        timeout_seconds=90,
     )
 
     assert captured["url"] == "https://www.right.codes/draw/v1/images/generations"
@@ -100,7 +101,9 @@ def test_gpt_image_2_url_generates_then_downloads(monkeypatch, tmp_path: Path):
         "size": _size_value(ImageSizeTier.SIZE_4K, ImageAspectRatio.WIDE_16_9),
         "response_format": "url",
     }
+    assert captured["timeout"] == 90
     assert captured["download_url"] == "https://cdn.example.com/generated.png"
+    assert captured["download_timeout"] == 90
     assert Path(result.file_path).exists()
     assert result.file_path.endswith("dogs.png")
     assert result.image_uri.startswith("file://")
@@ -205,6 +208,7 @@ def test_gpt_image_2_url_retries_then_succeeds(monkeypatch, tmp_path: Path):
         prompt="retry",
         save_path=str(tmp_path / "retry.png"),
         size=_size_value(ImageSizeTier.SIZE_2K, ImageAspectRatio.WIDE_16_9),
+        retry_count=3,
     )
 
     assert calls["post"] == 3

@@ -9,7 +9,13 @@ from pathlib import Path
 import httpx
 from pydantic import Field, field_validator
 
-from ..config import GPT_IMAGE_2_URL_NAME, ToolRuntimeConfig, get_settings
+from ..config import (
+    DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    DEFAULT_TOOL_RETRY_COUNT,
+    GPT_IMAGE_2_URL_NAME,
+    ToolRuntimeConfig,
+    get_settings,
+)
 from ..contracts.requests import PromptedImageRequestBase
 from ..contracts.image_size import (
     ImageAspectRatio,
@@ -25,7 +31,7 @@ from ..storage import build_image_uri, require_image_dimensions, save_image_byte
 GPT_IMAGE_2_URL_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_2_URL_RESPONSE_EXCERPT_LIMIT = 400
 GPT_IMAGE_2_URL_RESPONSE_FORMAT_URL = "url"
-GPT_IMAGE_2_URL_MAX_ATTEMPTS = 3
+RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
 GPT_IMAGE_2_URL_BENCHMARK_VERIFIED_SIZE_KEYS: frozenset[tuple[ImageSizeTier, ImageAspectRatio]] = frozenset(
     {
         (ImageSizeTier.SIZE_2K, ImageAspectRatio.SQUARE),
@@ -158,17 +164,6 @@ def _extract_image_url(response_json: dict[str, object]) -> str:
     return image_url
 
 
-def _download_image(image_url: str) -> httpx.Response:
-    response = httpx.get(image_url, timeout=get_settings().image_http_timeout_seconds, follow_redirects=True)
-    if response.is_error:
-        raise UpstreamServiceError(
-            GPT_IMAGE_2_URL_NAME,
-            ImageToolMode.GENERATE.value,
-            UpstreamErrorDetail(status_code=response.status_code, body_excerpt=response.text[:GPT_IMAGE_2_URL_RESPONSE_EXCERPT_LIMIT]),
-    )
-    return response
-
-
 def _generate_and_download_once(runtime_config: ToolRuntimeConfig, request: GptImage2UrlGenerateRequest) -> tuple[dict[str, object], str, httpx.Response]:
     response = httpx.post(
         _build_endpoint(runtime_config.effective_base_url),
@@ -180,12 +175,25 @@ def _generate_and_download_once(runtime_config: ToolRuntimeConfig, request: GptI
             "response_format": GPT_IMAGE_2_URL_RESPONSE_FORMAT_URL,
             **({"size": request.size} if request.size is not None else {}),
         },
-        timeout=get_settings().image_http_timeout_seconds,
+        timeout=request.timeout_seconds,
     )
     response_json = _handle_upstream_response(response)
     image_url = _extract_image_url(response_json)
-    download_response = _download_image(image_url)
+    download_response = _download_image_with_timeout(image_url, request.timeout_seconds)
     return response_json, image_url, download_response
+
+
+def _download_image_with_timeout(image_url: str, timeout_seconds: float) -> httpx.Response:
+    """Download the generated image with the caller-selected timeout."""
+
+    response = httpx.get(image_url, timeout=timeout_seconds, follow_redirects=True)
+    if response.is_error:
+        raise UpstreamServiceError(
+            GPT_IMAGE_2_URL_NAME,
+            ImageToolMode.GENERATE.value,
+            UpstreamErrorDetail(status_code=response.status_code, body_excerpt=response.text[:GPT_IMAGE_2_URL_RESPONSE_EXCERPT_LIMIT]),
+        )
+    return response
 
 
 def gpt_image_2_url_generate(
@@ -195,6 +203,8 @@ def gpt_image_2_url_generate(
     model: str | None = None,
     image: list[str] | None = None,
     size: str | None = None,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
     """Run the URL-returning image endpoint and persist the downloaded image."""
 
@@ -205,14 +215,17 @@ def gpt_image_2_url_generate(
         model=model,
         image=list(image or []),
         size=size,
+        timeout_seconds=timeout_seconds,
+        retry_count=retry_count,
     )
     runtime_config = get_settings().gpt_image_2_url_config()
     if request.model and request.model not in runtime_config.supported_models_effective:
         raise ValidationError(GPT_IMAGE_2_URL_NAME, ImageToolMode.GENERATE.value, "requested model is not supported")
 
     started_at: float = time.perf_counter()
+    total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
     last_error: Exception | None = None
-    for attempt in range(1, GPT_IMAGE_2_URL_MAX_ATTEMPTS + 1):
+    for attempt in range(1, total_attempts + 1):
         try:
             response_json, image_url, download_response = _generate_and_download_once(runtime_config, request)
             elapsed_seconds: float = time.perf_counter() - started_at
@@ -235,7 +248,7 @@ def gpt_image_2_url_generate(
             )
         except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
             last_error = exc
-            if attempt == GPT_IMAGE_2_URL_MAX_ATTEMPTS:
+            if attempt == total_attempts:
                 raise
 
     assert last_error is not None
