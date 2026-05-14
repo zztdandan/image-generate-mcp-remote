@@ -25,18 +25,18 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
     assert gpt_entry.env_values_non_secret.output_dir == str(tmp_path / "images")
     assert gpt_entry.env_values_non_secret.image_base_url == "https://cdn.example.com/assets"
     assert gpt_entry.env_values_non_secret.image_http_timeout_seconds == 180
-    assert "1280x1280 (1K, 1:1)" in gpt_entry.supported_size_presets
+    assert "1K + 1:1 (gpt=1280x1280)" in gpt_entry.supported_size_presets
     assert gpt_entry.api_key_configured is True
 
     nano_entry = next(tool for tool in result.tools if tool.tool_name == "nano_banana_2_official")
     assert nano_entry.supported_models_effective == ["gemini-3.1-flash-image-preview", "gemini-fast"]
-    assert "gpt=2048x1152, nano=2752x1536 (2K, 16:9)" in nano_entry.supported_size_presets
+    assert "2K + 16:9 (gpt=2048x1152, nano=2752x1536)" in nano_entry.supported_size_presets
 
     gpt_image_2_url_entry = next(tool for tool in result.tools if tool.tool_name == "gpt-image-2-url")
     assert gpt_image_2_url_entry.effective_model == "gpt-image-2-vip"
     assert gpt_image_2_url_entry.modes == ["generate"]
-    assert "1280x1280 (1K, 1:1)" in gpt_image_2_url_entry.supported_size_presets
-    assert "3840x2160 (4K, 16:9)" in gpt_image_2_url_entry.supported_size_presets
-    assert "2048x1360 (2K, 3:2)" not in gpt_image_2_url_entry.supported_size_presets
+    assert "1K + 1:1 (gpt=1280x1280)" in gpt_image_2_url_entry.supported_size_presets
+    assert "4K + 16:9 (gpt=3840x2160)" in gpt_image_2_url_entry.supported_size_presets
+    assert "2K + 3:2 (gpt=2048x1360)" not in gpt_image_2_url_entry.supported_size_presets
 
     get_settings.cache_clear()

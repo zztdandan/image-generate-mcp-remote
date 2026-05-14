@@ -17,7 +17,7 @@ GPT_IMAGE_2_OFFICIAL_NAME = "gpt_image_2_official"
 NANO_BANANA_2_OFFICIAL_NAME = "nano_banana_2_official"
 GPT_IMAGE_2_URL_NAME = "gpt-image-2-url"
 SERVICE_NAME = "image-generate-mcp-remote"
-SERVICE_VERSION = "0.9.5"
+SERVICE_VERSION = "0.9.6"
 
 GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL = "gpt-image-2"

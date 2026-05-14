@@ -43,14 +43,14 @@
 - 推荐安装到工具目录：`uv tool install image-generate-mcp-remote`
 - 推荐阅读真实部署与 MCP 配置导览：`./SYSTEMD_DEPLOYMENT_GUIDE.md`
 
-例如，安装 `v0.9.5` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
+例如，安装 `v0.9.6` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
 
 ```bash
 # 安装为全局工具
 uv tool install image-generate-mcp-remote
 
 # 指定版本
-uv tool install --refresh image-generate-mcp-remote==0.9.5
+uv tool install --refresh image-generate-mcp-remote==0.9.6
 ```
 
 ## 从源码安装与启动
@@ -208,10 +208,11 @@ OpenAI Images 兼容工具。
 - 支持按次调用覆盖 `api_key`、`base_url`、`model`；未显式传入时依次回退到环境变量与代码默认值，其中 `api_key` 没有代码默认值
 - 支持显式传入 `timeout_seconds`，默认 `180` 秒
 - 支持显式传入 `retry_count`，默认 `3`，表示失败后额外重试 3 次，总尝试次数为 4 次
+- 尺寸输入统一为 `image_size` + `aspect_ratio` 两个枚举，不再直接接收裸像素 `size`
 - 支持 `send_size` 与 `send_quality`：为 `false` 时不向上游发送对应字段，而是把该要求自动补进 `prompt`
-- 若传入 `size="宽x高"`，服务会自动归一化到支持的 30 档常用尺寸后再请求上游
+- `gpt_image_2_official` 会根据共享尺寸合同，把枚举对映射成对应 GPT 请求像素尺寸
 - 支持解析 `data[0].b64_json` 与 `data[0].url`；若上游返回 `url`，服务端会自动下载并保存到 `save_path`
-- 如传入无法解析的 `size`，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
+- 如传入不支持的枚举组合，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
 - 默认支持模型包含 `gpt-image-2` 与 `gpt-image-2-vip`
 
 ### `nano_banana_2_official`
@@ -226,6 +227,7 @@ Gemini `generateContent` 兼容工具。
 - 支持显式传入 `timeout_seconds`，默认 `180` 秒
 - 支持显式传入 `retry_count`，默认 `3`，表示失败后额外重试 3 次，总尝试次数为 4 次
 - 响应解析兼容 `inlineData` / `inline_data` 与 `mimeType` / `mime_type`
+- 尺寸输入统一为 `image_size` + `aspect_ratio` 两个枚举，服务会按共享尺寸合同映射到 `imageConfig`
 - 共享尺寸合同已同时记录 `gpt` 请求尺寸与 `nano banana` 实际输出尺寸；例如 `2K + 16:9` 对应 `gpt=2048x1152`、`nano=2752x1536`
 
 ### `gpt-image-2-url`
@@ -240,8 +242,8 @@ URL 返回型 `gpt-image-2` 独立工具。
 - 返回结果继续复用统一 `ImageToolResult` 结构，保留耗时、token 使用量与上游响应摘要
 - 支持显式传入 `timeout_seconds`，默认 `180` 秒
 - 支持显式传入 `retry_count`，默认 `3`，表示失败后额外重试 3 次，总尝试次数为 4 次
-- `size="宽x高"` 仅接受该 URL 工具支持的预设：全部 1K 共享尺寸，加上 `storage/images/benchmark-*` 中已实测通过的尺寸
-- 如传入不支持的 `size`，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
+- 尺寸输入统一为 `image_size` + `aspect_ratio` 两个枚举；该 URL 工具仅接受全部 `1K` 共享组合，加上已实测通过的部分 `2K/4K` 组合
+- 如传入不支持的枚举组合，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
 
 ## 内置技能
 

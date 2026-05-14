@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import httpx
-from pydantic import Field, field_validator
+from pydantic import Field, model_validator
 
 from ..config import (
     DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
@@ -19,9 +19,11 @@ from ..config import (
 from ..contracts.requests import PromptedImageRequestBase
 from ..contracts.image_size import (
     ImageAspectRatio,
+    ImageSizeProvider,
     ImageSizeTier,
-    SUPPORTED_IMAGE_SIZES,
     SupportedImageSize,
+    SupportedImageSizes,
+    provider_size_value,
     supported_image_size_error_message,
 )
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
@@ -56,31 +58,29 @@ GPT_IMAGE_2_URL_BENCHMARK_VERIFIED_SIZE_KEYS: frozenset[tuple[ImageSizeTier, Ima
 )
 GPT_IMAGE_2_URL_ALLOWED_SIZES: tuple[SupportedImageSize, ...] = tuple(
     preset
-    for preset in SUPPORTED_IMAGE_SIZES
+    for preset in SupportedImageSizes.all()
     if preset.tier is ImageSizeTier.SIZE_1K or (preset.tier, preset.aspect_ratio) in GPT_IMAGE_2_URL_BENCHMARK_VERIFIED_SIZE_KEYS
 )
-GPT_IMAGE_2_URL_ALLOWED_SIZE_VALUES: frozenset[str] = frozenset(preset.value for preset in GPT_IMAGE_2_URL_ALLOWED_SIZES)
+GPT_IMAGE_2_URL_ALLOWED_KEYS: frozenset[tuple[ImageSizeTier, ImageAspectRatio]] = frozenset(
+    (preset.tier, preset.aspect_ratio) for preset in GPT_IMAGE_2_URL_ALLOWED_SIZES
+)
 
 
 class GptImage2UrlGenerateRequest(PromptedImageRequestBase):
     """Generate mode contract for the URL-returning gpt-image tool."""
 
     image: list[str] = Field(default_factory=list)
-    size: str | None = None
 
-    @field_validator("size")
-    @classmethod
-    def validate_size(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        if value not in GPT_IMAGE_2_URL_ALLOWED_SIZE_VALUES:
+    @model_validator(mode="after")
+    def validate_size_selection(self) -> "GptImage2UrlGenerateRequest":
+        if (self.image_size, self.aspect_ratio) not in GPT_IMAGE_2_URL_ALLOWED_KEYS:
             raise ValueError(
                 supported_image_size_error_message(
-                    "size must be one of the gpt-image-2-url supported presets: all shared 1K presets plus benchmark-verified presets",
+                    "image_size plus aspect_ratio must be one of the gpt-image-2-url supported presets: all shared 1K presets plus benchmark-verified presets",
                     GPT_IMAGE_2_URL_ALLOWED_SIZES,
                 )
             )
-        return value
+        return self
 
 
 def _build_endpoint(base_url: str) -> str:
@@ -173,7 +173,7 @@ def _generate_and_download_once(runtime_config: ToolRuntimeConfig, request: GptI
             "prompt": request.prompt,
             "image": list(request.image),
             "response_format": GPT_IMAGE_2_URL_RESPONSE_FORMAT_URL,
-            **({"size": request.size} if request.size is not None else {}),
+            "size": provider_size_value(request.image_size, request.aspect_ratio, provider=ImageSizeProvider.GPT),
         },
         timeout=request.timeout_seconds,
     )
@@ -202,7 +202,8 @@ def gpt_image_2_url_generate(
     save_path: str,
     model: str | None = None,
     image: list[str] | None = None,
-    size: str | None = None,
+    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
+    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
     retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
@@ -214,7 +215,8 @@ def gpt_image_2_url_generate(
         save_path=save_path,
         model=model,
         image=list(image or []),
-        size=size,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
         timeout_seconds=timeout_seconds,
         retry_count=retry_count,
     )

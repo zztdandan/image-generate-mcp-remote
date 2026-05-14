@@ -9,6 +9,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from .config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, DEFAULT_TOOL_RETRY_COUNT, SERVICE_NAME, get_settings
+from .contracts.image_size import ImageAspectRatio, ImageSizeTier
 from .models.common import ImageToolMode, InputImage, ToolVersion
 from .tools.catalog import list_image_tools_catalog
 from .tools.gpt_image_2_official import (
@@ -71,7 +72,7 @@ def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
         "Generate or edit images via the OpenAI Images compatible gateway. "
         "Callers may override api_key, base_url, and model per request. "
         "Use send_size/send_quality to suppress those provider fields and move the requirement into the prompt instead. "
-        "The size parameter accepts auto or a '<width>x<height>' value; invalid size errors include the supported preset list. "
+        "Select image_size plus aspect_ratio from the catalog enums to derive the provider size preset. "
         "Call list_image_tools_catalog first when you need the current supported size presets."
     ),
 )
@@ -83,7 +84,8 @@ def gpt_image_2_official(
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
-    size: str | None = "auto",
+    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
+    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
     send_size: bool = True,
     quality: GptImageQuality = GptImageQuality.AUTO,
     send_quality: bool = True,
@@ -108,7 +110,8 @@ def gpt_image_2_official(
             api_key=api_key,
             base_url=base_url,
             model=model,
-            size=size,
+            aspect_ratio=aspect_ratio,
+            image_size=image_size,
             send_size=send_size,
             quality=quality,
             send_quality=send_quality,
@@ -130,7 +133,8 @@ def gpt_image_2_official(
         model=model,
         images=images or [],
         mask=mask,
-        size=size,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
         send_size=send_size,
         quality=quality,
         send_quality=send_quality,
@@ -147,7 +151,7 @@ def gpt_image_2_official(
     description=(
         "Generate or edit images via the Gemini compatible gateway. "
         "Callers may override api_key, base_url, and model per request. "
-        "Prefer aspect_ratio plus image_size, or pass size as '<width>x<height>' to map to the nearest shared preset. "
+        "Use image_size plus aspect_ratio from the shared catalog enums. "
         "Invalid size errors include the supported preset list."
     ),
 )
@@ -159,10 +163,9 @@ def nano_banana_2_official(
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
-    size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
-    aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
-    image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
+    aspect_ratio: NanoBananaAspectRatio = NanoBananaAspectRatio.SQUARE,
+    image_size: NanoBananaImageSize = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
@@ -180,7 +183,6 @@ def nano_banana_2_official(
             api_key=api_key,
             base_url=base_url,
             model=model,
-            size=size,
             response_modalities=response_modalities,
             aspect_ratio=aspect_ratio,
             image_size=image_size,
@@ -198,7 +200,6 @@ def nano_banana_2_official(
         api_key=api_key,
         base_url=base_url,
         model=model,
-        size=size,
         response_modalities=response_modalities,
         aspect_ratio=aspect_ratio,
         image_size=image_size,
@@ -217,7 +218,7 @@ def nano_banana_2_official(
         "This tool asks upstream for response_format=url, then downloads that returned image URL and saves it to save_path; "
         "callers do not need to download the URL themselves. "
         "The image parameter is an optional list of reference image URLs, not an output URL. "
-        "The size parameter must be one supported '<width>x<height>' preset; invalid size errors include the supported list. "
+        "Use image_size plus aspect_ratio from the shared catalog enums; only benchmark-verified combinations are accepted. "
         "Call list_image_tools_catalog first to inspect supported_size_presets and image_http_timeout_seconds."
     ),
 )
@@ -227,7 +228,8 @@ def gpt_image_2_url(
     save_path: str,
     model: str | None = None,
     image: list[str] | None = None,
-    size: str | None = None,
+    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
+    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
     retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 
@@ -240,7 +242,8 @@ def gpt_image_2_url(
         save_path=save_path,
         model=model,
         image=image,
-        size=size,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
         timeout_seconds=timeout_seconds,
         retry_count=retry_count,
     ).model_dump(mode="json")

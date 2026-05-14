@@ -14,7 +14,13 @@ from pydantic import field_validator, model_validator
 
 from ..contracts.enums import ImageBackground, ImageCount, ImageModeration, ImageOutputFormat, ImageQuality
 from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
-from ..contracts.image_size import ImageSizeProvider, SIZE_AUTO, normalize_supported_size
+from ..contracts.image_size import (
+    ImageAspectRatio,
+    ImageSizeProvider,
+    ImageSizeTier,
+    provider_size_value,
+    resolve_supported_size_selection,
+)
 from ..config import (
     DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
     DEFAULT_TOOL_RETRY_COUNT,
@@ -46,7 +52,6 @@ class GptImageGenerateRequest(GenerateImageRequestBase):
 
     api_key: str | None = None
     base_url: str | None = None
-    size: str | None = "auto"
     send_size: bool = True
     quality: GptImageQuality = GptImageQuality.AUTO
     send_quality: bool = True
@@ -65,14 +70,6 @@ class GptImageGenerateRequest(GenerateImageRequestBase):
             raise ValueError("output_compression must be within 0..100")
         return value
 
-    @field_validator("size")
-    @classmethod
-    def validate_size(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        return _validate_gpt_size(value)
-
-
 class GptImageEditRequest(EditImageRequestBase):
     """Edit mode contract for gpt_image_2_official."""
 
@@ -80,7 +77,6 @@ class GptImageEditRequest(EditImageRequestBase):
     base_url: str | None = None
     images: list[InputImage]
     mask: InputImage | None = None
-    size: str | None = "auto"
     send_size: bool = True
     quality: GptImageQuality = GptImageQuality.AUTO
     send_quality: bool = True
@@ -103,20 +99,6 @@ class GptImageEditRequest(EditImageRequestBase):
         if value < 0 or value > 100:
             raise ValueError("output_compression must be within 0..100")
         return value
-
-    @field_validator("size")
-    @classmethod
-    def validate_size(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        return _validate_gpt_size(value)
-
-
-def _validate_gpt_size(size: str) -> str:
-    """Normalize any explicit size to the nearest supported preset."""
-
-    return normalize_supported_size(size, provider=ImageSizeProvider.GPT)
-
 
 def _mime_type_for_output(output_format: GptImageOutputFormat) -> str:
     return f"image/{output_format.value}"
@@ -233,14 +215,17 @@ def _download_image_with_timeout(mode: ImageToolMode, image_url: str, timeout_se
 
 def _build_provider_prompt(
     prompt: str,
-    size: str | None,
+    aspect_ratio: ImageAspectRatio,
+    image_size: ImageSizeTier,
     send_size: bool,
     quality: GptImageQuality,
     send_quality: bool,
 ) -> str:
     requirements: list[str] = []
-    if not send_size and size not in (None, SIZE_AUTO):
-        requirements.append(f"Target image size: {size}.")
+    if not send_size:
+        requirements.append(
+            f"Target image size: {provider_size_value(image_size, aspect_ratio, provider=ImageSizeProvider.GPT)}."
+        )
     if not send_quality and quality is not GptImageQuality.AUTO:
         requirements.append(f"Target image quality: {quality.value}.")
     if not requirements:
@@ -352,7 +337,8 @@ def gpt_image_2_official_generate(
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
-    size: str | None = "auto",
+    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
+    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
     send_size: bool = True,
     quality: GptImageQuality = GptImageQuality.AUTO,
     send_quality: bool = True,
@@ -374,7 +360,8 @@ def gpt_image_2_official_generate(
         api_key=api_key,
         base_url=base_url,
         model=model,
-        size=size,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
         send_size=send_size,
         quality=quality,
         send_quality=send_quality,
@@ -394,10 +381,13 @@ def gpt_image_2_official_generate(
     if request.model and request.model not in runtime_config.supported_models_effective:
         raise ValidationError(GPT_IMAGE_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
+    resolve_supported_size_selection(request.image_size, request.aspect_ratio)
+
     payload: dict[str, str | int] = {
         "prompt": _build_provider_prompt(
             request.prompt,
-            request.size,
+            request.aspect_ratio,
+            request.image_size,
             request.send_size,
             request.quality,
             request.send_quality,
@@ -410,8 +400,8 @@ def gpt_image_2_official_generate(
     }
     if request.send_quality:
         payload["quality"] = request.quality.value
-    if request.send_size and request.size is not None:
-        payload["size"] = request.size
+    if request.send_size:
+        payload["size"] = provider_size_value(request.image_size, request.aspect_ratio, provider=ImageSizeProvider.GPT)
     if request.output_compression is not None:
         payload["output_compression"] = request.output_compression
 
@@ -455,7 +445,8 @@ def gpt_image_2_official_edit(
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
-    size: str | None = "auto",
+    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
+    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
     send_size: bool = True,
     quality: GptImageQuality = GptImageQuality.AUTO,
     send_quality: bool = True,
@@ -477,7 +468,8 @@ def gpt_image_2_official_edit(
         model=model,
         images=images,
         mask=mask,
-        size=size,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
         send_size=send_size,
         quality=quality,
         send_quality=send_quality,
@@ -495,10 +487,13 @@ def gpt_image_2_official_edit(
     if request.model and request.model not in runtime_config.supported_models_effective:
         raise ValidationError(GPT_IMAGE_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
+    resolve_supported_size_selection(request.image_size, request.aspect_ratio)
+
     form_data: dict[str, str] = {
         "prompt": _build_provider_prompt(
             request.prompt,
-            request.size,
+            request.aspect_ratio,
+            request.image_size,
             request.send_size,
             request.quality,
             request.send_quality,
@@ -509,8 +504,8 @@ def gpt_image_2_official_edit(
     }
     if request.send_quality:
         form_data["quality"] = request.quality.value
-    if request.send_size and request.size is not None:
-        form_data["size"] = request.size
+    if request.send_size:
+        form_data["size"] = provider_size_value(request.image_size, request.aspect_ratio, provider=ImageSizeProvider.GPT)
     if request.output_compression is not None:
         form_data["output_compression"] = str(request.output_compression)
 

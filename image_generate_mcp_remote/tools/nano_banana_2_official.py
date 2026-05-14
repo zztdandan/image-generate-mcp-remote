@@ -10,7 +10,7 @@ import httpx
 from pydantic import BaseModel, Field, model_validator
 
 from ..contracts.enums import ImageResponseModality, ImageThinkingLevel
-from ..contracts.image_size import ImageAspectRatio, ImageSizeTier, SIZE_AUTO, SupportedImageSize, resolve_supported_size
+from ..contracts.image_size import ImageAspectRatio, ImageSizeTier, SupportedImageSize, resolve_supported_size_selection
 from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
 from ..config import (
     DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
@@ -39,7 +39,6 @@ class NanoBananaGenerateRequest(GenerateImageRequestBase):
 
     api_key: str | None = None
     base_url: str | None = None
-    size: str | None = None
     response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K
@@ -49,7 +48,7 @@ class NanoBananaGenerateRequest(GenerateImageRequestBase):
     @model_validator(mode="after")
     def validate_modalities(self) -> "NanoBananaGenerateRequest":
         _validate_response_modalities(self.response_modalities)
-        _apply_size_preference(self)
+        resolve_supported_size_selection(self.image_size, self.aspect_ratio)
         return self
 
 
@@ -59,7 +58,6 @@ class NanoBananaEditRequest(EditImageRequestBase):
     api_key: str | None = None
     base_url: str | None = None
     input_images: list[InputImage]
-    size: str | None = None
     response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K
@@ -71,42 +69,22 @@ class NanoBananaEditRequest(EditImageRequestBase):
         _validate_response_modalities(self.response_modalities)
         if not self.input_images:
             raise ValueError("input_images must contain at least one item")
-        _apply_size_preference(self)
+        resolve_supported_size_selection(self.image_size, self.aspect_ratio)
         return self
 
 
 class NanoBananaSizeConfig(BaseModel):
     """Resolved size preferences for Gemini-compatible payloads."""
 
-    size: str
     aspect_ratio: NanoBananaAspectRatio
     image_size: NanoBananaImageSize
 
 
-def _apply_size_preference(request: NanoBananaGenerateRequest | NanoBananaEditRequest) -> None:
-    """Resolve a shared `size` input into Gemini imageConfig fields."""
+def _resolve_size_config(image_size: ImageSizeTier, aspect_ratio: ImageAspectRatio) -> NanoBananaSizeConfig:
+    """Map one shared size selection into Nano Banana config enums."""
 
-    if request.size is None:
-        return
-    if request.size == SIZE_AUTO:
-        request.size = None
-        return
-
-    size_config = _resolve_size_config(request.size)
-    request.size = size_config.size
-    request.aspect_ratio = size_config.aspect_ratio
-    request.image_size = size_config.image_size
-
-
-def _resolve_size_config(size: str) -> NanoBananaSizeConfig:
-    """Map a normalized size string into Nano Banana config enums."""
-
-    if size == SIZE_AUTO:
-        raise ValueError("size auto cannot be converted into Nano Banana imageConfig")
-
-    preset: SupportedImageSize = resolve_supported_size(size)
+    preset: SupportedImageSize = resolve_supported_size_selection(image_size, aspect_ratio)
     return NanoBananaSizeConfig(
-        size=preset.nano_banana_value,
         aspect_ratio=_map_aspect_ratio(preset.aspect_ratio),
         image_size=_map_image_size(preset.tier),
     )
@@ -151,8 +129,7 @@ def _image_part(resolved_image: ResolvedInputImage) -> dict[str, dict[str, str]]
 def _payload(
     prompt: str,
     response_modalities: list[ResponseModality],
-    aspect_ratio: NanoBananaAspectRatio | None,
-    image_size: NanoBananaImageSize | None,
+    size_config: NanoBananaSizeConfig,
     thinking_level: NanoBananaThinkingLevel,
     include_thoughts: bool,
     inline_images: list[ResolvedInputImage],
@@ -162,10 +139,8 @@ def _payload(
         parts.append(_image_part(input_image))
 
     image_config: dict[str, str] = {}
-    if aspect_ratio is not None:
-        image_config["aspectRatio"] = aspect_ratio.value
-    if image_size is not None:
-        image_config["imageSize"] = image_size.value
+    image_config["aspectRatio"] = size_config.aspect_ratio.value
+    image_config["imageSize"] = size_config.image_size.value
 
     payload: dict[str, object] = {
         "contents": [{"parts": parts}],
@@ -300,7 +275,6 @@ def nano_banana_2_official_generate(
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
-    size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
@@ -319,7 +293,6 @@ def nano_banana_2_official_generate(
         api_key=api_key,
         base_url=base_url,
         model=model,
-        size=size,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
         aspect_ratio=aspect_ratio,
         image_size=image_size,
@@ -337,12 +310,13 @@ def nano_banana_2_official_generate(
     if provider_model not in runtime_config.supported_models_effective:
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
+    size_config = _resolve_size_config(request.image_size, request.aspect_ratio)
+
     total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
     request_payload: dict[str, object] = _payload(
         prompt=request.prompt,
         response_modalities=request.response_modalities,
-        aspect_ratio=request.aspect_ratio,
-        image_size=request.image_size,
+        size_config=size_config,
         thinking_level=request.thinking_level,
         include_thoughts=request.include_thoughts,
         inline_images=[],
@@ -384,7 +358,6 @@ def nano_banana_2_official_edit(
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
-    size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
     image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
@@ -404,7 +377,6 @@ def nano_banana_2_official_edit(
         api_key=api_key,
         base_url=base_url,
         model=model,
-        size=size,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
         aspect_ratio=aspect_ratio,
         image_size=image_size,
@@ -423,12 +395,12 @@ def nano_banana_2_official_edit(
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
     resolved_images: list[ResolvedInputImage] = [_resolve_input_image(image) for image in request.input_images]
+    size_config = _resolve_size_config(request.image_size, request.aspect_ratio)
     total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
     request_payload: dict[str, object] = _payload(
         prompt=request.prompt,
         response_modalities=request.response_modalities,
-        aspect_ratio=request.aspect_ratio,
-        image_size=request.image_size,
+        size_config=size_config,
         thinking_level=request.thinking_level,
         include_thoughts=request.include_thoughts,
         inline_images=resolved_images,

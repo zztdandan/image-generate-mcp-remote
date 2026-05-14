@@ -29,16 +29,16 @@
 
 - `<deploy-root>` 可以是 `~/mcp/image-generate-mcp`
 
-如果你希望固定到某个已发布版本，例如 `0.9.5`，推荐在部署目录中显式执行：
+如果你希望固定到某个已发布版本，例如 `0.9.6`，推荐在部署目录中显式执行：
 
 ```bash
-uv tool install --refresh image-generate-mcp-remote==0.9.5
+uv tool install --refresh image-generate-mcp-remote==0.9.6
 ```
 
 或者临时验证某个版本：
 
 ```bash
-uvx --from image-generate-mcp-remote==0.9.5 image-generate-mcp-remote --help
+uvx --from image-generate-mcp-remote==0.9.6 image-generate-mcp-remote --help
 ```
 
 ## 3. 当前部署模式对应的 unit 示例

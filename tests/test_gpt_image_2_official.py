@@ -4,6 +4,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from image_generate_mcp_remote.contracts.image_size import ImageAspectRatio, ImageSizeTier
 from image_generate_mcp_remote.config import get_settings
 from image_generate_mcp_remote.errors import ValidationError
 from image_generate_mcp_remote.models.common import ImageToolMode, ToolVersion
@@ -63,7 +64,8 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
         mode=ImageToolMode.GENERATE,
         prompt="draw a cat",
         save_path=str(tmp_path / "generated.png"),
-        size="1024x1024",
+        aspect_ratio=ImageAspectRatio.SQUARE,
+        image_size=ImageSizeTier.SIZE_1K,
         quality=GptImageQuality.HIGH,
         output_format=GptImageOutputFormat.PNG,
         background=GptImageBackground.OPAQUE,
@@ -115,7 +117,8 @@ def test_gpt_generate_uses_runtime_overrides_and_prompt_fallback(monkeypatch, tm
         api_key="arg-secret-key",
         base_url="https://api.laozhang.ai/v1",
         model="gpt-image-2-vip",
-        size="2048x1152",
+        aspect_ratio=ImageAspectRatio.WIDE_16_9,
+        image_size=ImageSizeTier.SIZE_2K,
         send_size=False,
         quality=GptImageQuality.HIGH,
         send_quality=False,
@@ -241,7 +244,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     assert result.height == 1
 
 
-def test_gpt_generate_normalizes_small_size_without_upstream_call_failure(monkeypatch, tmp_path: Path):
+def test_gpt_generate_builds_provider_size_from_enums(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
     monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
 
@@ -257,12 +260,13 @@ def test_gpt_generate_normalizes_small_size_without_upstream_call_failure(monkey
     result = gpt_image_2_official_generate(
         version=ToolVersion.V1,
         mode=ImageToolMode.GENERATE,
-        prompt="bad size",
+        prompt="wide size",
         save_path=str(tmp_path / "bad-size.png"),
-        size="100x100",
+        aspect_ratio=ImageAspectRatio.WIDE_16_9,
+        image_size=ImageSizeTier.SIZE_2K,
     )
 
-    assert captured["json"]["size"] == "1280x1280"
+    assert captured["json"]["size"] == "2048x1152"
     assert result.file_path.endswith("bad-size.png")
 
 
@@ -291,23 +295,3 @@ def test_gpt_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
     assert calls["post"] == 4
     assert result.file_path.endswith("retry.png")
 
-
-def test_gpt_generate_rejects_malformed_size_without_upstream_call(monkeypatch):
-    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
-
-    def fake_post(*args, **kwargs):
-        raise AssertionError("should not call upstream")
-
-    monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
-
-    with pytest.raises(ValidationError, match="Supported size presets"):
-        try:
-            gpt_image_2_official_generate(
-                version=ToolVersion.V1,
-                mode=ImageToolMode.GENERATE,
-                prompt="bad size",
-                save_path="/tmp/bad-size.png",
-                size="1024*1024",
-            )
-        except Exception as exc:
-            raise ValidationError("gpt_image_2_official", "generate", str(exc)) from exc

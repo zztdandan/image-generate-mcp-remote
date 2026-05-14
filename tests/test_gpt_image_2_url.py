@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from image_generate_mcp_remote.config import get_settings
-from image_generate_mcp_remote.contracts.image_size import ImageAspectRatio, ImageSizeTier, ProviderImageSize, SupportedImageSize
+from image_generate_mcp_remote.contracts.image_size import ImageAspectRatio, ImageSizeKey, ImageSizeTier, ProviderImageSize, SupportedImageSize
 from image_generate_mcp_remote.models.common import ToolVersion
 from image_generate_mcp_remote.tools.gpt_image_2_url import GPT_IMAGE_2_URL_ALLOWED_SIZES, gpt_image_2_url_generate
 
@@ -18,7 +18,7 @@ def _size_value(tier: ImageSizeTier, aspect_ratio: ImageAspectRatio) -> str:
     preset: SupportedImageSize = next(
         item for item in GPT_IMAGE_2_URL_ALLOWED_SIZES if item.tier is tier and item.aspect_ratio is aspect_ratio
     )
-    return preset.value
+    return preset.gpt_value
 
 
 class DummyPostResponse:
@@ -88,7 +88,8 @@ def test_gpt_image_2_url_generates_then_downloads(monkeypatch, tmp_path: Path):
         save_path=str(tmp_path / "dogs.png"),
         model="gpt-image-2-vip",
         image=["https://example.com/ref.png"],
-        size=_size_value(ImageSizeTier.SIZE_4K, ImageAspectRatio.WIDE_16_9),
+        aspect_ratio=ImageAspectRatio.WIDE_16_9,
+        image_size=ImageSizeTier.SIZE_4K,
         timeout_seconds=90,
     )
 
@@ -118,7 +119,7 @@ def test_gpt_image_2_url_generates_then_downloads(monkeypatch, tmp_path: Path):
     }
 
 
-def test_gpt_image_2_url_rejects_unknown_size(monkeypatch):
+def test_gpt_image_2_url_rejects_unverified_size_selection(monkeypatch):
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_URL_API_KEY", "secret-key")
 
     with pytest.raises(ValueError, match="Supported size presets") as exc_info:
@@ -126,10 +127,11 @@ def test_gpt_image_2_url_rejects_unknown_size(monkeypatch):
             version=ToolVersion.V1,
             prompt="bad size",
             save_path="/tmp/bad-size.png",
-            size="1024*1024",
+            aspect_ratio=ImageAspectRatio.PHOTO_3_2,
+            image_size=ImageSizeTier.SIZE_2K,
         )
-    assert "1280x1280 (1K, 1:1)" in str(exc_info.value)
-    assert "3840x2160 (4K, 16:9)" in str(exc_info.value)
+    assert "1K + 1:1" in str(exc_info.value)
+    assert "4K + 16:9" in str(exc_info.value)
 
 
 def test_gpt_image_2_url_accepts_verified_size(monkeypatch, tmp_path: Path):
@@ -151,13 +153,12 @@ def test_gpt_image_2_url_accepts_verified_size(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_url.httpx.post", fake_post)
     monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_url.httpx.get", fake_get)
 
-    verified_size = _size_value(ImageSizeTier.SIZE_1K, ImageAspectRatio.SQUARE)
-
     result = gpt_image_2_url_generate(
         version=ToolVersion.V1,
         prompt="verified size",
         save_path=str(tmp_path / "verified-size.png"),
-        size=verified_size,
+        aspect_ratio=ImageAspectRatio.SQUARE,
+        image_size=ImageSizeTier.SIZE_1K,
     )
 
     assert result.file_path.endswith("verified-size.png")
@@ -167,22 +168,24 @@ def test_gpt_image_2_url_rejects_unverified_shared_size_with_size_list(monkeypat
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_URL_API_KEY", "secret-key")
 
     rejected_size = SupportedImageSize(
-        ImageSizeTier.SIZE_2K,
-        ImageAspectRatio.PHOTO_3_2,
+        ImageSizeKey(ImageSizeTier.SIZE_2K, ImageAspectRatio.PHOTO_3_2),
         ProviderImageSize(2048, 1360),
         ProviderImageSize(2528, 1696),
-    ).value
-    assert rejected_size not in {preset.value for preset in GPT_IMAGE_2_URL_ALLOWED_SIZES}
+    )
+    assert (rejected_size.tier, rejected_size.aspect_ratio) not in {
+        (preset.tier, preset.aspect_ratio) for preset in GPT_IMAGE_2_URL_ALLOWED_SIZES
+    }
 
     with pytest.raises(ValueError, match="Supported size presets") as exc_info:
         gpt_image_2_url_generate(
             version=ToolVersion.V1,
             prompt="unverified size",
             save_path="/tmp/unverified-size.png",
-            size=rejected_size,
+            aspect_ratio=ImageAspectRatio.PHOTO_3_2,
+            image_size=ImageSizeTier.SIZE_2K,
         )
     assert "all shared 1K presets plus benchmark-verified presets" in str(exc_info.value)
-    assert "1280x960 (1K, 4:3)" in str(exc_info.value)
+    assert "1K + 4:3" in str(exc_info.value)
 
 
 def test_gpt_image_2_url_retries_then_succeeds(monkeypatch, tmp_path: Path):
@@ -212,7 +215,8 @@ def test_gpt_image_2_url_retries_then_succeeds(monkeypatch, tmp_path: Path):
         version=ToolVersion.V1,
         prompt="retry",
         save_path=str(tmp_path / "retry.png"),
-        size=_size_value(ImageSizeTier.SIZE_2K, ImageAspectRatio.WIDE_16_9),
+        aspect_ratio=ImageAspectRatio.WIDE_16_9,
+        image_size=ImageSizeTier.SIZE_2K,
         retry_count=3,
     )
 
