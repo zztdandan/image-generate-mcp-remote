@@ -43,7 +43,7 @@
 - 推荐临时运行：`uvx image-generate-mcp-remote --transport stdio`
 - 推荐安装到工具目录：`uv tool install image-generate-mcp-remote`
 
-例如，安装 `v0.9.2` 后可直接这样使用：
+例如，安装 `v0.9.4` 后可直接这样使用：
 
 ```bash
 # 临时运行，不落本地项目源码
@@ -54,7 +54,7 @@ uv tool install image-generate-mcp-remote
 image-generate-mcp-remote --transport stdio
 
 # 指定版本
-uvx --from image-generate-mcp-remote==0.9.2 image-generate-mcp-remote --transport stdio
+uvx --from image-generate-mcp-remote==0.9.4 image-generate-mcp-remote --transport stdio
 ```
 
 ## 从源码安装与启动
@@ -293,7 +293,7 @@ uv run pytest
 
 ## 发布说明
 
-- GitHub Release：创建如 `v0.9.2` 的 release 后，会自动触发 `.github/workflows/release.yml`
+- GitHub Release：创建如 `v0.9.4` 的 release 后，会自动触发 `.github/workflows/release.yml`
 - PyPI 发布：工作流使用 `uv build --no-sources` 与 `uv publish`
 - Trusted Publishing：建议在 `PyPI` 中为仓库 `zztdandan/image-generate-mcp-remote` 配置 GitHub Actions trusted publisher，并将 workflow 文件名填写为 `release.yml`、environment 填写 `pypi`
 - Token 回退方案：若暂不使用 Trusted Publishing，可在 GitHub 仓库 secrets 中配置 `UV_PUBLISH_TOKEN`，同一工作流会自动读取并发布
