@@ -37,6 +37,8 @@ NanoBananaThinkingLevel = ImageThinkingLevel
 class NanoBananaGenerateRequest(GenerateImageRequestBase):
     """Generate mode contract for nano_banana_2_official."""
 
+    api_key: str | None = None
+    base_url: str | None = None
     size: str | None = None
     response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
     aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
@@ -54,6 +56,8 @@ class NanoBananaGenerateRequest(GenerateImageRequestBase):
 class NanoBananaEditRequest(EditImageRequestBase):
     """Edit mode contract for nano_banana_2_official."""
 
+    api_key: str | None = None
+    base_url: str | None = None
     input_images: list[InputImage]
     size: str | None = None
     response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
@@ -102,7 +106,7 @@ def _resolve_size_config(size: str) -> NanoBananaSizeConfig:
 
     preset: SupportedImageSize = resolve_supported_size(size)
     return NanoBananaSizeConfig(
-        size=preset.value,
+        size=preset.nano_banana_value,
         aspect_ratio=_map_aspect_ratio(preset.aspect_ratio),
         image_size=_map_image_size(preset.tier),
     )
@@ -124,6 +128,7 @@ def _build_headers(runtime_config: ToolRuntimeConfig) -> dict[str, str]:
     if not runtime_config.api_key:
         raise ConfigError(runtime_config.tool_name, "config", "missing API key")
     return {
+        "Authorization": f"Bearer {runtime_config.api_key}",
         "Content-Type": "application/json",
         "x-goog-api-key": runtime_config.api_key,
     }
@@ -225,8 +230,12 @@ def _parse_response(
             if not isinstance(part, dict):
                 continue
             inline_data = part.get("inlineData")
+            if not isinstance(inline_data, dict):
+                inline_data = part.get("inline_data")
             if isinstance(inline_data, dict):
                 mime_type = inline_data.get("mimeType")
+                if not isinstance(mime_type, str):
+                    mime_type = inline_data.get("mime_type")
                 data = inline_data.get("data")
                 if isinstance(mime_type, str) and isinstance(data, str) and data:
                     image_bytes = base64.b64decode(data)
@@ -288,6 +297,8 @@ def nano_banana_2_official_generate(
     mode: Literal[ImageToolMode.GENERATE],
     prompt: str,
     save_path: str,
+    api_key: str | None = None,
+    base_url: str | None = None,
     model: str | None = None,
     size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
@@ -305,6 +316,8 @@ def nano_banana_2_official_generate(
         mode=mode,
         prompt=prompt,
         save_path=save_path,
+        api_key=api_key,
+        base_url=base_url,
         model=model,
         size=size,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
@@ -315,7 +328,11 @@ def nano_banana_2_official_generate(
         timeout_seconds=timeout_seconds,
         retry_count=retry_count,
     )
-    runtime_config = get_settings().nano_banana_2_official_config()
+    runtime_config = get_settings().nano_banana_2_official_config(
+        api_key_override=request.api_key,
+        base_url_override=request.base_url,
+        model_override=request.model,
+    )
     provider_model: str = request.model or runtime_config.effective_model
     if provider_model not in runtime_config.supported_models_effective:
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
@@ -364,6 +381,8 @@ def nano_banana_2_official_edit(
     prompt: str,
     save_path: str,
     input_images: list[InputImage],
+    api_key: str | None = None,
+    base_url: str | None = None,
     model: str | None = None,
     size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
@@ -382,6 +401,8 @@ def nano_banana_2_official_edit(
         prompt=prompt,
         save_path=save_path,
         input_images=input_images,
+        api_key=api_key,
+        base_url=base_url,
         model=model,
         size=size,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
@@ -392,7 +413,11 @@ def nano_banana_2_official_edit(
         timeout_seconds=timeout_seconds,
         retry_count=retry_count,
     )
-    runtime_config = get_settings().nano_banana_2_official_config()
+    runtime_config = get_settings().nano_banana_2_official_config(
+        api_key_override=request.api_key,
+        base_url_override=request.base_url,
+        model_override=request.model,
+    )
     provider_model: str = request.model or runtime_config.effective_model
     if provider_model not in runtime_config.supported_models_effective:
         raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")

@@ -93,6 +93,106 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
     assert captured["timeout"] == 45
 
 
+def test_gpt_generate_uses_runtime_overrides_and_prompt_fallback(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "env-secret-key")
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse({"created": 777, "data": [{"b64_json": image_payload}]})
+
+    monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
+
+    result = gpt_image_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="draw a mug",
+        save_path=str(tmp_path / "override.png"),
+        api_key="arg-secret-key",
+        base_url="https://api.laozhang.ai/v1",
+        model="gpt-image-2-vip",
+        size="2048x1152",
+        send_size=False,
+        quality=GptImageQuality.HIGH,
+        send_quality=False,
+    )
+
+    assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
+    assert captured["headers"] == {"Authorization": "Bearer arg-secret-key"}
+    assert captured["json"] == {
+        "prompt": (
+            "draw a mug\n\nProvider parameter fallback requirements:\n"
+            "- Target image size: 2048x1152.\n"
+            "- Target image quality: high."
+        ),
+        "model": "gpt-image-2-vip",
+        "output_format": "png",
+        "background": "auto",
+        "moderation": "auto",
+        "n": 1,
+    }
+    assert result.provider_model == "gpt-image-2-vip"
+
+
+def test_gpt_generate_downloads_url_response(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["post_url"] = url
+        return DummyResponse({"created": 321, "data": [{"url": "https://cdn.example.com/generated.png"}]})
+
+    def fake_get(url: str, timeout: float, follow_redirects: bool):
+        captured["download_url"] = url
+        captured["download_timeout"] = timeout
+        captured["follow_redirects"] = follow_redirects
+        return DummyResponse({})
+
+    fake_get_response = type(
+        "FakeDownloadResponse",
+        (),
+        {
+            "__init__": lambda self: None,
+            "content": PNG_1X1_BYTES,
+            "status_code": 200,
+            "text": "download",
+            "headers": {"Content-Type": "image/png"},
+            "is_error": False,
+        },
+    )
+
+    def fake_get_with_image(url: str, timeout: float, follow_redirects: bool):
+        captured["download_url"] = url
+        captured["download_timeout"] = timeout
+        captured["follow_redirects"] = follow_redirects
+        return fake_get_response()
+
+    monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.post", fake_post)
+    monkeypatch.setattr("image_generate_mcp_remote.tools.gpt_image_2_official.httpx.get", fake_get_with_image)
+
+    result = gpt_image_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="draw from url response",
+        save_path=str(tmp_path / "from-url.png"),
+        timeout_seconds=22,
+    )
+
+    assert captured["post_url"] == "https://api.openai.com/v1/images/generations"
+    assert captured["download_url"] == "https://cdn.example.com/generated.png"
+    assert captured["download_timeout"] == 22
+    assert captured["follow_redirects"] is True
+    assert result.file_path.endswith("from-url.png")
+    assert result.provider_response_excerpt == {
+        "created": "321",
+        "source_url": "https://cdn.example.com/generated.png",
+    }
+
+
 def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")

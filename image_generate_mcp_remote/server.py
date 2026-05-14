@@ -69,6 +69,8 @@ def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
     title="GPT Image 2 Official",
     description=(
         "Generate or edit images via the OpenAI Images compatible gateway. "
+        "Callers may override api_key, base_url, and model per request. "
+        "Use send_size/send_quality to suppress those provider fields and move the requirement into the prompt instead. "
         "The size parameter accepts auto or a '<width>x<height>' value; invalid size errors include the supported preset list. "
         "Call list_image_tools_catalog first when you need the current supported size presets."
     ),
@@ -78,9 +80,13 @@ def gpt_image_2_official(
     mode: ImageToolMode,
     prompt: str,
     save_path: str,
+    api_key: str | None = None,
+    base_url: str | None = None,
     model: str | None = None,
     size: str | None = "auto",
+    send_size: bool = True,
     quality: GptImageQuality = GptImageQuality.AUTO,
+    send_quality: bool = True,
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
     output_compression: int | None = None,
     background: GptImageBackground = GptImageBackground.AUTO,
@@ -99,9 +105,13 @@ def gpt_image_2_official(
             mode=ImageToolMode.GENERATE,
             prompt=prompt,
             save_path=save_path,
+            api_key=api_key,
+            base_url=base_url,
             model=model,
             size=size,
+            send_size=send_size,
             quality=quality,
+            send_quality=send_quality,
             output_format=output_format,
             output_compression=output_compression,
             background=background,
@@ -115,11 +125,15 @@ def gpt_image_2_official(
         mode=ImageToolMode.EDIT,
         prompt=prompt,
         save_path=save_path,
+        api_key=api_key,
+        base_url=base_url,
         model=model,
         images=images or [],
         mask=mask,
         size=size,
+        send_size=send_size,
         quality=quality,
+        send_quality=send_quality,
         output_format=output_format,
         output_compression=output_compression,
         background=background,
@@ -132,6 +146,7 @@ def gpt_image_2_official(
     title="Nano Banana 2 Official",
     description=(
         "Generate or edit images via the Gemini compatible gateway. "
+        "Callers may override api_key, base_url, and model per request. "
         "Prefer aspect_ratio plus image_size, or pass size as '<width>x<height>' to map to the nearest shared preset. "
         "Invalid size errors include the supported preset list."
     ),
@@ -141,6 +156,8 @@ def nano_banana_2_official(
     mode: ImageToolMode,
     prompt: str,
     save_path: str,
+    api_key: str | None = None,
+    base_url: str | None = None,
     model: str | None = None,
     size: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
@@ -160,6 +177,8 @@ def nano_banana_2_official(
             mode=ImageToolMode.GENERATE,
             prompt=prompt,
             save_path=save_path,
+            api_key=api_key,
+            base_url=base_url,
             model=model,
             size=size,
             response_modalities=response_modalities,
@@ -176,6 +195,8 @@ def nano_banana_2_official(
         prompt=prompt,
         save_path=save_path,
         input_images=input_images or [],
+        api_key=api_key,
+        base_url=base_url,
         model=model,
         size=size,
         response_modalities=response_modalities,

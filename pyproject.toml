@@ -1,6 +1,6 @@
 [project]
 name = "image-generate-mcp-remote"
-version = "0.9.4"
+version = "0.9.5"
 description = "Remote MCP server for image generation"
 readme = "README.md"
 requires-python = ">=3.11"

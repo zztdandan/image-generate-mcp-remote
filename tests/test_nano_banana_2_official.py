@@ -70,7 +70,11 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     )
 
     assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
-    assert captured["headers"] == {"Content-Type": "application/json", "x-goog-api-key": "secret-key"}
+    assert captured["headers"] == {
+        "Authorization": "Bearer secret-key",
+        "Content-Type": "application/json",
+        "x-goog-api-key": "secret-key",
+    }
     assert captured["json"]["contents"] == [{"parts": [{"text": "make a fox"}]}]
     assert captured["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "1:1", "imageSize": "1K"}
@@ -80,6 +84,69 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert result.elapsed_seconds >= 0
     assert result.width == 1
     assert result.height == 1
+
+
+def test_nano_generate_uses_runtime_overrides(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "env-secret-key")
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["url"] = url
+        captured["headers"] = headers
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse(
+            {
+                "responseId": "resp-override",
+                "candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "image/png", "data": image_payload}}]}}],
+            }
+        )
+
+    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", fake_post)
+
+    result = nano_banana_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="make a mug",
+        save_path=str(tmp_path / "override.png"),
+        api_key="arg-secret-key",
+        base_url="https://api.laozhang.ai",
+        model="gemini-3.1-flash-image-preview",
+        size="2048x2048",
+    )
+
+    assert captured["url"] == "https://api.laozhang.ai/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
+    assert captured["headers"] == {
+        "Authorization": "Bearer arg-secret-key",
+        "Content-Type": "application/json",
+        "x-goog-api-key": "arg-secret-key",
+    }
+    assert result.file_path.endswith("override.png")
+
+
+def test_nano_parse_response_accepts_snake_case_inline_data(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "secret-key")
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse(
+            {
+                "responseId": "resp-snake",
+                "candidates": [{"content": {"parts": [{"inline_data": {"mime_type": "image/webp", "data": image_payload}}]}}],
+            }
+        )
+
+    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", fake_post)
+
+    result = nano_banana_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="snake case",
+        save_path=str(tmp_path / "snake.webp"),
+    )
+
+    assert result.mime_type == "image/webp"
+    assert result.file_path.endswith("snake.webp")
 
 
 def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):

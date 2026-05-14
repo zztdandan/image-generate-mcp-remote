@@ -14,6 +14,7 @@ from pydantic import field_validator, model_validator
 
 from ..contracts.enums import ImageBackground, ImageCount, ImageModeration, ImageOutputFormat, ImageQuality
 from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
+from ..contracts.image_size import ImageSizeProvider, SIZE_AUTO, normalize_supported_size
 from ..config import (
     DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
     DEFAULT_TOOL_RETRY_COUNT,
@@ -24,13 +25,13 @@ from ..config import (
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
 from ..storage import build_image_uri, decode_base64_image, require_image_dimensions, save_image_bytes_to_path
-from ..contracts.image_size import normalize_supported_size
 
 GPT_IMAGE_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_EDITS_PATH = "/images/edits"
 GPT_IMAGE_SUPPORTED_EDIT_IMAGE_MAX = 16
 GPT_IMAGE_RESPONSE_EXCERPT_LIMIT = 400
 RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
+PROMPT_FALLBACK_HEADER = "Provider parameter fallback requirements:"
 
 
 GptImageQuality = ImageQuality
@@ -43,8 +44,12 @@ GptImageCount = ImageCount
 class GptImageGenerateRequest(GenerateImageRequestBase):
     """Generate mode contract for gpt_image_2_official."""
 
+    api_key: str | None = None
+    base_url: str | None = None
     size: str | None = "auto"
+    send_size: bool = True
     quality: GptImageQuality = GptImageQuality.AUTO
+    send_quality: bool = True
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG
     output_compression: int | None = None
     background: GptImageBackground = GptImageBackground.AUTO
@@ -71,10 +76,14 @@ class GptImageGenerateRequest(GenerateImageRequestBase):
 class GptImageEditRequest(EditImageRequestBase):
     """Edit mode contract for gpt_image_2_official."""
 
+    api_key: str | None = None
+    base_url: str | None = None
     images: list[InputImage]
     mask: InputImage | None = None
     size: str | None = "auto"
+    send_size: bool = True
     quality: GptImageQuality = GptImageQuality.AUTO
+    send_quality: bool = True
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG
     output_compression: int | None = None
     background: GptImageBackground = GptImageBackground.AUTO
@@ -106,11 +115,27 @@ class GptImageEditRequest(EditImageRequestBase):
 def _validate_gpt_size(size: str) -> str:
     """Normalize any explicit size to the nearest supported preset."""
 
-    return normalize_supported_size(size)
+    return normalize_supported_size(size, provider=ImageSizeProvider.GPT)
 
 
 def _mime_type_for_output(output_format: GptImageOutputFormat) -> str:
     return f"image/{output_format.value}"
+
+
+def _mime_type_from_download(download_response: httpx.Response, save_path: str, image_url: str) -> str:
+    header_mime_type = download_response.headers.get("Content-Type", "").split(";", maxsplit=1)[0].strip()
+    if header_mime_type.startswith("image/"):
+        return header_mime_type
+
+    guessed_from_path, _ = mimetypes.guess_type(save_path)
+    if guessed_from_path:
+        return guessed_from_path
+
+    guessed_from_url, _ = mimetypes.guess_type(image_url)
+    if guessed_from_url:
+        return guessed_from_url
+
+    return "image/png"
 
 
 def _build_endpoint(base_url: str, path: str) -> str:
@@ -186,10 +211,42 @@ def _extract_usage(response_json: dict[str, object]) -> UsageInfo | None:
     )
 
 
-def _provider_excerpt(response_json: dict[str, object]) -> dict[str, str]:
+def _provider_excerpt(response_json: dict[str, object], source_url: str | None = None) -> dict[str, str]:
     created = response_json.get("created")
     created_text = str(created) if created is not None else ""
-    return {"created": created_text[:GPT_IMAGE_RESPONSE_EXCERPT_LIMIT]}
+    excerpt: dict[str, str] = {"created": created_text[:GPT_IMAGE_RESPONSE_EXCERPT_LIMIT]}
+    if source_url is not None:
+        excerpt["source_url"] = source_url[:GPT_IMAGE_RESPONSE_EXCERPT_LIMIT]
+    return excerpt
+
+
+def _download_image_with_timeout(mode: ImageToolMode, image_url: str, timeout_seconds: float) -> httpx.Response:
+    response = httpx.get(image_url, timeout=timeout_seconds, follow_redirects=True)
+    if response.is_error:
+        raise UpstreamServiceError(
+            GPT_IMAGE_2_OFFICIAL_NAME,
+            mode.value,
+            UpstreamErrorDetail(status_code=response.status_code, body_excerpt=response.text[:GPT_IMAGE_RESPONSE_EXCERPT_LIMIT]),
+        )
+    return response
+
+
+def _build_provider_prompt(
+    prompt: str,
+    size: str | None,
+    send_size: bool,
+    quality: GptImageQuality,
+    send_quality: bool,
+) -> str:
+    requirements: list[str] = []
+    if not send_size and size not in (None, SIZE_AUTO):
+        requirements.append(f"Target image size: {size}.")
+    if not send_quality and quality is not GptImageQuality.AUTO:
+        requirements.append(f"Target image quality: {quality.value}.")
+    if not requirements:
+        return prompt
+    formatted_requirements = "\n".join(f"- {item}" for item in requirements)
+    return f"{prompt}\n\n{PROMPT_FALLBACK_HEADER}\n{formatted_requirements}"
 
 
 def _parse_image_response(
@@ -198,6 +255,7 @@ def _parse_image_response(
     provider_model: str,
     output_format: GptImageOutputFormat,
     save_path: str,
+    timeout_seconds: float,
     elapsed_seconds: float,
 ) -> ImageToolResult:
     data_items = response_json.get("data")
@@ -208,12 +266,22 @@ def _parse_image_response(
         raise ResponseParseError(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, "response.data[0] is invalid")
 
     image_base64 = first_item.get("b64_json")
-    if not isinstance(image_base64, str) or not image_base64:
-        raise ResponseParseError(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, "response missing data[0].b64_json")
+    source_url = first_item.get("url")
+    image_bytes: bytes
+    mime_type: str
+    provider_excerpt_source_url: str | None = None
+    if isinstance(image_base64, str) and image_base64:
+        image_bytes = decode_base64_image(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, image_base64)
+        mime_type = _mime_type_for_output(output_format)
+    elif isinstance(source_url, str) and source_url.startswith("https://"):
+        download_response = _download_image_with_timeout(mode, source_url, timeout_seconds)
+        image_bytes = download_response.content
+        mime_type = _mime_type_from_download(download_response, save_path, source_url)
+        provider_excerpt_source_url = source_url
+    else:
+        raise ResponseParseError(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, "response missing data[0].b64_json or data[0].url")
 
-    image_bytes = decode_base64_image(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, image_base64)
     width, height = require_image_dimensions(GPT_IMAGE_2_OFFICIAL_NAME, mode.value, image_bytes)
-    mime_type = _mime_type_for_output(output_format)
     file_path = save_image_bytes_to_path(image_bytes, save_path)
     return ImageToolResult(
         tool_name=GPT_IMAGE_2_OFFICIAL_NAME,
@@ -227,7 +295,7 @@ def _parse_image_response(
         width=width,
         height=height,
         usage=_extract_usage(response_json),
-        provider_response_excerpt=_provider_excerpt(response_json),
+        provider_response_excerpt=_provider_excerpt(response_json, provider_excerpt_source_url),
     )
 
 
@@ -281,9 +349,13 @@ def gpt_image_2_official_generate(
     mode: Literal[ImageToolMode.GENERATE],
     prompt: str,
     save_path: str,
+    api_key: str | None = None,
+    base_url: str | None = None,
     model: str | None = None,
     size: str | None = "auto",
+    send_size: bool = True,
     quality: GptImageQuality = GptImageQuality.AUTO,
+    send_quality: bool = True,
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
     output_compression: int | None = None,
     background: GptImageBackground = GptImageBackground.AUTO,
@@ -299,9 +371,13 @@ def gpt_image_2_official_generate(
         mode=mode,
         prompt=prompt,
         save_path=save_path,
+        api_key=api_key,
+        base_url=base_url,
         model=model,
         size=size,
+        send_size=send_size,
         quality=quality,
+        send_quality=send_quality,
         output_format=output_format,
         output_compression=output_compression,
         background=background,
@@ -310,20 +386,31 @@ def gpt_image_2_official_generate(
         timeout_seconds=timeout_seconds,
         retry_count=retry_count,
     )
-    runtime_config = get_settings().gpt_image_2_official_config()
+    runtime_config = get_settings().gpt_image_2_official_config(
+        api_key_override=request.api_key,
+        base_url_override=request.base_url,
+        model_override=request.model,
+    )
     if request.model and request.model not in runtime_config.supported_models_effective:
         raise ValidationError(GPT_IMAGE_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
     payload: dict[str, str | int] = {
-        "prompt": request.prompt,
+        "prompt": _build_provider_prompt(
+            request.prompt,
+            request.size,
+            request.send_size,
+            request.quality,
+            request.send_quality,
+        ),
         "model": request.model or runtime_config.effective_model,
-        "quality": request.quality.value,
         "output_format": request.output_format.value,
         "background": request.background.value,
         "moderation": request.moderation.value,
         "n": int(request.n),
     }
-    if request.size is not None:
+    if request.send_quality:
+        payload["quality"] = request.quality.value
+    if request.send_size and request.size is not None:
         payload["size"] = request.size
     if request.output_compression is not None:
         payload["output_compression"] = request.output_compression
@@ -353,6 +440,7 @@ def gpt_image_2_official_generate(
         payload["model"],
         request.output_format,
         request.save_path,
+        request.timeout_seconds,
         elapsed_seconds,
     )
 
@@ -364,9 +452,13 @@ def gpt_image_2_official_edit(
     save_path: str,
     images: list[InputImage],
     mask: InputImage | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
     model: str | None = None,
     size: str | None = "auto",
+    send_size: bool = True,
     quality: GptImageQuality = GptImageQuality.AUTO,
+    send_quality: bool = True,
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
     output_compression: int | None = None,
     background: GptImageBackground = GptImageBackground.AUTO,
@@ -380,29 +472,44 @@ def gpt_image_2_official_edit(
         mode=mode,
         prompt=prompt,
         save_path=save_path,
+        api_key=api_key,
+        base_url=base_url,
         model=model,
         images=images,
         mask=mask,
         size=size,
+        send_size=send_size,
         quality=quality,
+        send_quality=send_quality,
         output_format=output_format,
         output_compression=output_compression,
         background=background,
         timeout_seconds=timeout_seconds,
         retry_count=retry_count,
     )
-    runtime_config = get_settings().gpt_image_2_official_config()
+    runtime_config = get_settings().gpt_image_2_official_config(
+        api_key_override=request.api_key,
+        base_url_override=request.base_url,
+        model_override=request.model,
+    )
     if request.model and request.model not in runtime_config.supported_models_effective:
         raise ValidationError(GPT_IMAGE_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
 
     form_data: dict[str, str] = {
-        "prompt": request.prompt,
+        "prompt": _build_provider_prompt(
+            request.prompt,
+            request.size,
+            request.send_size,
+            request.quality,
+            request.send_quality,
+        ),
         "model": request.model or runtime_config.effective_model,
-        "quality": request.quality.value,
         "output_format": request.output_format.value,
         "background": request.background.value,
     }
-    if request.size is not None:
+    if request.send_quality:
+        form_data["quality"] = request.quality.value
+    if request.send_size and request.size is not None:
         form_data["size"] = request.size
     if request.output_compression is not None:
         form_data["output_compression"] = str(request.output_compression)
@@ -442,5 +549,6 @@ def gpt_image_2_official_edit(
         form_data["model"],
         request.output_format,
         request.save_path,
+        request.timeout_seconds,
         elapsed_seconds,
     )

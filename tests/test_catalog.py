@@ -20,6 +20,7 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
     assert len(result.tools) == 3
     gpt_entry = next(tool for tool in result.tools if tool.tool_name == "gpt_image_2_official")
     assert gpt_entry.effective_model == "gpt-image-2-alt"
+    assert gpt_entry.supported_models_default == ["gpt-image-2", "gpt-image-2-vip"]
     assert gpt_entry.env_values_non_secret.supported_models == ["gpt-image-2", "gpt-image-2-alt"]
     assert gpt_entry.env_values_non_secret.output_dir == str(tmp_path / "images")
     assert gpt_entry.env_values_non_secret.image_base_url == "https://cdn.example.com/assets"
@@ -29,6 +30,7 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
 
     nano_entry = next(tool for tool in result.tools if tool.tool_name == "nano_banana_2_official")
     assert nano_entry.supported_models_effective == ["gemini-3.1-flash-image-preview", "gemini-fast"]
+    assert "gpt=2048x1152, nano=2752x1536 (2K, 16:9)" in nano_entry.supported_size_presets
 
     gpt_image_2_url_entry = next(tool for tool in result.tools if tool.tool_name == "gpt-image-2-url")
     assert gpt_image_2_url_entry.effective_model == "gpt-image-2-vip"

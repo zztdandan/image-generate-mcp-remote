@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from image_generate_mcp_remote.config import get_settings
-from image_generate_mcp_remote.contracts.image_size import ImageAspectRatio, ImageSizeTier, SupportedImageSize
+from image_generate_mcp_remote.contracts.image_size import ImageAspectRatio, ImageSizeTier, ProviderImageSize, SupportedImageSize
 from image_generate_mcp_remote.models.common import ToolVersion
 from image_generate_mcp_remote.tools.gpt_image_2_url import GPT_IMAGE_2_URL_ALLOWED_SIZES, gpt_image_2_url_generate
 
@@ -166,7 +166,12 @@ def test_gpt_image_2_url_accepts_verified_size(monkeypatch, tmp_path: Path):
 def test_gpt_image_2_url_rejects_unverified_shared_size_with_size_list(monkeypatch):
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_URL_API_KEY", "secret-key")
 
-    rejected_size = SupportedImageSize(ImageSizeTier.SIZE_2K, ImageAspectRatio.PHOTO_3_2, 2048, 1360).value
+    rejected_size = SupportedImageSize(
+        ImageSizeTier.SIZE_2K,
+        ImageAspectRatio.PHOTO_3_2,
+        ProviderImageSize(2048, 1360),
+        ProviderImageSize(2528, 1696),
+    ).value
     assert rejected_size not in {preset.value for preset in GPT_IMAGE_2_URL_ALLOWED_SIZES}
 
     with pytest.raises(ValueError, match="Supported size presets") as exc_info:

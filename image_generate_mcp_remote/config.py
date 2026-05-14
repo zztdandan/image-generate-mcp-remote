@@ -17,11 +17,11 @@ GPT_IMAGE_2_OFFICIAL_NAME = "gpt_image_2_official"
 NANO_BANANA_2_OFFICIAL_NAME = "nano_banana_2_official"
 GPT_IMAGE_2_URL_NAME = "gpt-image-2-url"
 SERVICE_NAME = "image-generate-mcp-remote"
-SERVICE_VERSION = "0.9.4"
+SERVICE_VERSION = "0.9.5"
 
 GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL = "gpt-image-2"
-GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT = ["gpt-image-2"]
+GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT = ["gpt-image-2", "gpt-image-2-vip"]
 
 NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com"
 NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL = "gemini-3.1-flash-image-preview"
@@ -133,7 +133,13 @@ class Settings(BaseSettings):
 
         return value.upper()
 
-    def gpt_image_2_official_config(self) -> ToolRuntimeConfig:
+    def gpt_image_2_official_config(
+        self,
+        *,
+        api_key_override: str | None = None,
+        base_url_override: str | None = None,
+        model_override: str | None = None,
+    ) -> ToolRuntimeConfig:
         """Build effective config for the OpenAI Images compatible tool."""
 
         supported_models, source = _parse_supported_models(
@@ -143,21 +149,24 @@ class Settings(BaseSettings):
         effective_supported_models: list[str] = (
             supported_models if supported_models else list(GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT)
         )
+        effective_base_url: str = base_url_override or self.gpt_image_2_official_base_url or GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL
+        effective_model: str = model_override or self.gpt_image_2_official_model or GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL
+        effective_api_key: str = api_key_override or self.gpt_image_2_official_api_key
         return ToolRuntimeConfig(
             tool_name=GPT_IMAGE_2_OFFICIAL_NAME,
             modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
             protocol_style="openai-images",
             default_base_url=GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL,
-            effective_base_url=self.gpt_image_2_official_base_url or GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL,
-            base_url_source="env" if self.gpt_image_2_official_base_url else "default",
+            effective_base_url=effective_base_url,
+            base_url_source="argument" if base_url_override else ("env" if self.gpt_image_2_official_base_url else "default"),
             default_model=GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL,
-            effective_model=self.gpt_image_2_official_model or GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL,
-            model_source="env" if self.gpt_image_2_official_model else "default",
+            effective_model=effective_model,
+            model_source="argument" if model_override else ("env" if self.gpt_image_2_official_model else "default"),
             supported_models_default=list(GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT),
             supported_models_effective=effective_supported_models,
             supported_models_source=source,
-            api_key=self.gpt_image_2_official_api_key,
-            api_key_configured=bool(self.gpt_image_2_official_api_key),
+            api_key=effective_api_key,
+            api_key_configured=bool(effective_api_key),
             env_names=ToolEnvironmentNames(
                 api_key=GPT_IMAGE_2_OFFICIAL_API_KEY_ENV,
                 base_url=GPT_IMAGE_2_OFFICIAL_BASE_URL_ENV,
@@ -166,7 +175,13 @@ class Settings(BaseSettings):
             ),
         )
 
-    def nano_banana_2_official_config(self) -> ToolRuntimeConfig:
+    def nano_banana_2_official_config(
+        self,
+        *,
+        api_key_override: str | None = None,
+        base_url_override: str | None = None,
+        model_override: str | None = None,
+    ) -> ToolRuntimeConfig:
         """Build effective config for the Gemini compatible tool."""
 
         supported_models, source = _parse_supported_models(
@@ -176,21 +191,24 @@ class Settings(BaseSettings):
         effective_supported_models: list[str] = (
             supported_models if supported_models else list(NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT)
         )
+        effective_base_url: str = base_url_override or self.nano_banana_2_official_base_url or NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL
+        effective_model: str = model_override or self.nano_banana_2_official_model or NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL
+        effective_api_key: str = api_key_override or self.nano_banana_2_official_api_key
         return ToolRuntimeConfig(
             tool_name=NANO_BANANA_2_OFFICIAL_NAME,
             modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
             protocol_style="gemini-generate-content",
             default_base_url=NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL,
-            effective_base_url=self.nano_banana_2_official_base_url or NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL,
-            base_url_source="env" if self.nano_banana_2_official_base_url else "default",
+            effective_base_url=effective_base_url,
+            base_url_source="argument" if base_url_override else ("env" if self.nano_banana_2_official_base_url else "default"),
             default_model=NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL,
-            effective_model=self.nano_banana_2_official_model or NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL,
-            model_source="env" if self.nano_banana_2_official_model else "default",
+            effective_model=effective_model,
+            model_source="argument" if model_override else ("env" if self.nano_banana_2_official_model else "default"),
             supported_models_default=list(NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT),
             supported_models_effective=effective_supported_models,
             supported_models_source=source,
-            api_key=self.nano_banana_2_official_api_key,
-            api_key_configured=bool(self.nano_banana_2_official_api_key),
+            api_key=effective_api_key,
+            api_key_configured=bool(effective_api_key),
             env_names=ToolEnvironmentNames(
                 api_key=NANO_BANANA_2_OFFICIAL_API_KEY_ENV,
                 base_url=NANO_BANANA_2_OFFICIAL_BASE_URL_ENV,

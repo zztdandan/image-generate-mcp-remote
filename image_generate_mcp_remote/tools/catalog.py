@@ -16,7 +16,7 @@ from ..config import (
     ToolRuntimeConfig,
     get_settings,
 )
-from ..contracts.image_size import SUPPORTED_IMAGE_SIZES, SupportedImageSize
+from ..contracts.image_size import ImageSizeProvider, SUPPORTED_IMAGE_SIZES, SupportedImageSize
 from ..errors import ValidationError
 from ..models.common import ToolCatalogEntry, ToolCatalogResponse, ToolEnvValuesNonSecret, ToolVersion
 from .gpt_image_2_url import GPT_IMAGE_2_URL_ALLOWED_SIZES
@@ -56,6 +56,11 @@ def _supported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
         size_presets = GPT_IMAGE_2_URL_ALLOWED_SIZES
     else:
         size_presets = SUPPORTED_IMAGE_SIZES
+    if runtime_config.tool_name == "nano_banana_2_official":
+        return [
+            f"gpt={preset.gpt_value}, nano={preset.nano_banana_value} ({preset.tier.value}, {preset.aspect_ratio.value})"
+            for preset in size_presets
+        ]
     return [f"{preset.value} ({preset.tier.value}, {preset.aspect_ratio.value})" for preset in size_presets]
 
 
