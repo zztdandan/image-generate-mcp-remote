@@ -13,6 +13,7 @@
 - 提供 `nano_banana_2_official` 工具，兼容 Gemini `generateContent` 风格的文生图与参考图编辑
 - 提供 `gpt-image-2-url` 工具，兼容 `https://www.right.codes/draw/v1/images/generations` 并自动下载返回图片 URL
 - 提供 `list_image_tools_catalog` 工具，用于输出当前服务的默认配置、有效模型与非敏感环境变量信息
+- 提供 `skills/gpt-icon-generate/SKILL.md` 图标生成技能，约定规则网格图标板生成、校验和切图流程
 - 默认网关已切换到 `uocode`
 
 ## 默认上游配置
@@ -236,6 +237,15 @@ URL 返回型 `gpt-image-2` 独立工具。
 - 支持显式传入 `retry_count`，默认 `3`，表示失败后额外重试 3 次，总尝试次数为 4 次
 - `size="宽x高"` 仅接受该 URL 工具支持的预设：全部 1K 共享尺寸，加上 `storage/images/benchmark-*` 中已实测通过的尺寸
 - 如传入不支持的 `size`，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
+
+## 内置技能
+
+### `gpt-icon-generate`
+
+- 技能文件：`skills/gpt-icon-generate/SKILL.md`
+- 用途：批量图标板生成、规则网格校验、透明 PNG 切图、UI 图标库落盘
+- 默认链路：优先使用 `gpt_image_2_official` 生成 `2K`、`1:1`、`4x4 / 16` 图标板
+- 附带脚本：`skills/gpt-icon-generate/scripts/verify_image_output.py`、`skills/gpt-icon-generate/scripts/plan_icon_sheet_params.py`、`skills/gpt-icon-generate/scripts/split_icon_sheet_connected_bbox.py`
 
 ## 环境变量说明
 
