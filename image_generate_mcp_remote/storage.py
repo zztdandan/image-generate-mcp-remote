@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import base64
 import binascii
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .config import get_settings
 from .errors import ResponseParseError
 
 OUTPUT_EXTENSION_BY_MIME = {
@@ -16,12 +16,15 @@ OUTPUT_EXTENSION_BY_MIME = {
     "image/jpeg": ".jpeg",
     "image/webp": ".webp",
 }
+IMAGE_OUTPUT_DIR_ENV = "IMAGE_OUTPUT_DIR"
+IMAGE_BASE_URL_ENV = "IMAGE_BASE_URL"
+DEFAULT_OUTPUT_DIR = "storage/images"
 
 
 def ensure_output_dir() -> Path:
     """Create the configured output directory when needed."""
 
-    path = Path(get_settings().image_output_dir)
+    path = Path(os.getenv(IMAGE_OUTPUT_DIR_ENV, DEFAULT_OUTPUT_DIR))
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -29,7 +32,7 @@ def ensure_output_dir() -> Path:
 def build_image_uri(path: Path) -> str:
     """Build a public image URI or a local file URI."""
 
-    image_base_url: str = get_settings().image_base_url
+    image_base_url = os.getenv(IMAGE_BASE_URL_ENV, "")
     if image_base_url:
         return f"{image_base_url.rstrip('/')}/{path.name}"
     return path.resolve().as_uri()

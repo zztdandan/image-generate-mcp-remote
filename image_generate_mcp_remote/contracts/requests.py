@@ -6,9 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ..config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, DEFAULT_TOOL_RETRY_COUNT
 from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
 from ..models.common import ImageToolMode, ToolVersion
+
+DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 180.0
+DEFAULT_TOOL_RETRY_COUNT = 3
 
 
 class PromptedImageRequestBase(BaseModel):

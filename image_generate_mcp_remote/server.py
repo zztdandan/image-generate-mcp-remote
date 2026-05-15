@@ -12,6 +12,7 @@ from .config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, DEFAULT_TOOL_RETRY_COUNT
 from .contracts.image_size import ImageAspectRatio, ImageSizeTier
 from .models.common import ImageToolMode, InputImage, ToolVersion
 from .tools.catalog import list_image_tools_catalog
+from .tools.gpt_image_2_temporary import gpt_image_2_temporary_generate
 from .tools.gpt_image_2_official import (
     GptImageBackground,
     GptImageCount,
@@ -21,6 +22,7 @@ from .tools.gpt_image_2_official import (
     gpt_image_2_official_edit,
     gpt_image_2_official_generate,
 )
+from .tools.nano_banana_2_temporary import nano_banana_2_temporary_generate
 from .tools.nano_banana_2_official import (
     NanoBananaAspectRatio,
     NanoBananaImageSize,
@@ -70,8 +72,7 @@ def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
     title="GPT Image 2 Official",
     description=(
         "Generate or edit images via the OpenAI Images compatible gateway. "
-        "Callers may override api_key, base_url, and model per request. "
-        "Use send_size/send_quality to suppress those provider fields and move the requirement into the prompt instead. "
+        "The active startup preset owns provider, model, timeout, retry, and field dispatch behavior. "
         "Select image_size plus aspect_ratio from the catalog enums to derive the provider size preset. "
         "Call list_image_tools_catalog first when you need the current supported size presets."
     ),
@@ -81,21 +82,14 @@ def gpt_image_2_official(
     mode: ImageToolMode,
     prompt: str,
     save_path: str,
-    api_key: str | None = None,
-    base_url: str | None = None,
-    model: str | None = None,
     aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
     image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
-    send_size: bool = True,
     quality: GptImageQuality = GptImageQuality.AUTO,
-    send_quality: bool = True,
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
     output_compression: int | None = None,
     background: GptImageBackground = GptImageBackground.AUTO,
     moderation: GptImageModeration = GptImageModeration.AUTO,
     n: GptImageCount = GptImageCount.SINGLE,
-    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
     images: list[InputImage] | None = None,
     mask: InputImage | None = None,
 ) -> dict[str, object]:
@@ -107,50 +101,36 @@ def gpt_image_2_official(
             mode=ImageToolMode.GENERATE,
             prompt=prompt,
             save_path=save_path,
-            api_key=api_key,
-            base_url=base_url,
-            model=model,
             aspect_ratio=aspect_ratio,
             image_size=image_size,
-            send_size=send_size,
             quality=quality,
-            send_quality=send_quality,
             output_format=output_format,
             output_compression=output_compression,
             background=background,
             moderation=moderation,
             n=n,
-            timeout_seconds=timeout_seconds,
-            retry_count=retry_count,
         ).model_dump(mode="json")
     return gpt_image_2_official_edit(
         version=version,
-        mode=ImageToolMode.EDIT,
-        prompt=prompt,
-        save_path=save_path,
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
-        images=images or [],
-        mask=mask,
-        aspect_ratio=aspect_ratio,
-        image_size=image_size,
-        send_size=send_size,
-        quality=quality,
-        send_quality=send_quality,
-        output_format=output_format,
-        output_compression=output_compression,
-        background=background,
-        timeout_seconds=timeout_seconds,
-        retry_count=retry_count,
-    ).model_dump(mode="json")
+            mode=ImageToolMode.EDIT,
+            prompt=prompt,
+            save_path=save_path,
+            images=images or [],
+            mask=mask,
+            aspect_ratio=aspect_ratio,
+            image_size=image_size,
+            quality=quality,
+            output_format=output_format,
+            output_compression=output_compression,
+            background=background,
+        ).model_dump(mode="json")
 
 
 @mcp.tool(
     title="Nano Banana 2 Official",
     description=(
         "Generate or edit images via the Gemini compatible gateway. "
-        "Callers may override api_key, base_url, and model per request. "
+        "The active startup preset owns provider, model, timeout, retry, and field dispatch behavior. "
         "Use image_size plus aspect_ratio from the shared catalog enums. "
         "Invalid size errors include the supported preset list."
     ),
@@ -160,16 +140,11 @@ def nano_banana_2_official(
     mode: ImageToolMode,
     prompt: str,
     save_path: str,
-    api_key: str | None = None,
-    base_url: str | None = None,
-    model: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
     aspect_ratio: NanoBananaAspectRatio = NanoBananaAspectRatio.SQUARE,
     image_size: NanoBananaImageSize = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
-    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
     input_images: list[InputImage] | None = None,
 ) -> dict[str, object]:
     """Expose generate/edit behavior behind one product-level tool."""
@@ -180,16 +155,11 @@ def nano_banana_2_official(
             mode=ImageToolMode.GENERATE,
             prompt=prompt,
             save_path=save_path,
-            api_key=api_key,
-            base_url=base_url,
-            model=model,
             response_modalities=response_modalities,
             aspect_ratio=aspect_ratio,
             image_size=image_size,
             thinking_level=thinking_level,
             include_thoughts=include_thoughts,
-            timeout_seconds=timeout_seconds,
-            retry_count=retry_count,
         ).model_dump(mode="json")
     return nano_banana_2_official_edit(
         version=version,
@@ -197,16 +167,95 @@ def nano_banana_2_official(
         prompt=prompt,
         save_path=save_path,
         input_images=input_images or [],
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
         response_modalities=response_modalities,
         aspect_ratio=aspect_ratio,
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
+    ).model_dump(mode="json")
+
+
+@mcp.tool(
+    title="GPT Image 2 Temporary",
+    description=(
+        "Temporary OpenAI Images-compatible exploration tool. "
+        "Allows per-call api_key, base_url, model, and timeout, but sends only conservative fields by default."
+    ),
+)
+def gpt_image_2_temporary(
+    version: ToolVersion,
+    api_key: str,
+    base_url: str,
+    model: str,
+    prompt: str,
+    save_path: str,
+    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
+    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
+    quality: GptImageQuality = GptImageQuality.AUTO,
+    output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
+    background: GptImageBackground = GptImageBackground.AUTO,
+    moderation: GptImageModeration = GptImageModeration.AUTO,
+    send_quality: bool = False,
+    send_output_format: bool = False,
+    send_background: bool = False,
+    send_moderation: bool = False,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+) -> dict[str, object]:
+    """Expose temporary OpenAI Images-compatible exploration without preset registry."""
+
+    return gpt_image_2_temporary_generate(
+        version=version,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        prompt=prompt,
+        save_path=save_path,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
+        quality=quality,
+        output_format=output_format,
+        background=background,
+        moderation=moderation,
+        send_quality=send_quality,
+        send_output_format=send_output_format,
+        send_background=send_background,
+        send_moderation=send_moderation,
         timeout_seconds=timeout_seconds,
-        retry_count=retry_count,
+    ).model_dump(mode="json")
+
+
+@mcp.tool(
+    title="Nano Banana 2 Temporary",
+    description=(
+        "Temporary Gemini generateContent-compatible exploration tool. "
+        "Allows per-call api_key, base_url, model, and timeout for unknown providers."
+    ),
+)
+def nano_banana_2_temporary(
+    version: ToolVersion,
+    api_key: str,
+    base_url: str,
+    model: str,
+    prompt: str,
+    save_path: str,
+    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
+    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
+    response_modalities: list[ResponseModality] | None = None,
+    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+) -> dict[str, object]:
+    """Expose temporary Gemini-compatible exploration without preset registry."""
+
+    return nano_banana_2_temporary_generate(
+        version=version,
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        prompt=prompt,
+        save_path=save_path,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
+        response_modalities=response_modalities,
+        timeout_seconds=timeout_seconds,
     ).model_dump(mode="json")
 
 

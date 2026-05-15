@@ -108,14 +108,15 @@ uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
 
 如果你关注的是真实远端部署、systemd 托管、客户端如何接入在线 MCP 服务，建议优先阅读 `./SYSTEMD_DEPLOYMENT_GUIDE.md`；本节仅保留最常见配置摘要。
 
-### 方式一：stdio 直连（推荐本地开发）
+### 方式一：通用 stdio 直连（推荐本地开发）
 
-适用于大多数支持本地命令启动 MCP Server 的客户端。
+适用于使用通用 MCP 配置风格的客户端，主要是 claude code
 
 ```json
 {
   "mcpServers": {
     "image-generate-mcp-remote": {
+      "type": "stdio",
       "command": "uv",
       "args": [
         "run",
@@ -124,7 +125,7 @@ uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
         "stdio"
       ],
       "timeout": 500000,
-      "cwd": "/absolute/path/to/image-generate-mcp-remote",
+      "cwd": "/Users/zhongting/workspace/image-generate-mcp-remote",
       "env": {
         "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY": "sk-xxxx",
         "IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL": "https://api.openai.com/v1",
@@ -144,7 +145,56 @@ uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
 }
 ```
 
-### 方式二：Streamable HTTP 远程接入
+### 方式二：OpenCode 本地 stdio 直连
+
+OpenCode 的 `opencode.json` 使用自己的 MCP 配置结构：本地 MCP 需要声明 `type: "local"`，并把启动命令和参数合并写入 `command` 数组；环境变量字段名是 `environment`，不是通用示例里的 `env`；OpenCode 也不使用 `mcpServers` 作为顶层字段，而是使用 `mcp`。
+
+适用于项目级配置文件，例如：`<project>/.opencode/opencode.json`。
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "image-generate-mcp-remote": {
+      "type": "local",
+      "command": [
+        "uv",
+        "run",
+        "--directory",
+        "/absolute/path/to/image-generate-mcp-remote",
+        "image-generate-mcp-remote",
+        "--transport",
+        "stdio"
+      ],
+      "enabled": true,
+      "timeout": 500000,
+      "environment": {
+        "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY": "sk-xxxx",
+        "IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL": "https://api.openai.com/v1",
+        "IMG_GEN_GPT_IMAGE_2_OFFICIAL_MODEL": "gpt-image-2",
+        "IMG_GEN_GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS": "gpt-image-2",
+        "IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY": "sk-xxxx",
+        "IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL": "https://generativelanguage.googleapis.com",
+        "IMG_GEN_NANO_BANANA_2_OFFICIAL_MODEL": "gemini-3.1-flash-image-preview",
+        "IMG_GEN_NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS": "gemini-3.1-flash-image-preview",
+        "IMAGE_OUTPUT_DIR": "storage/images",
+        "IMAGE_BASE_URL": "",
+        "IMAGE_HTTP_TIMEOUT_SECONDS": "180",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
+```
+
+两种 stdio 配置的区别：
+
+- 通用 MCP 客户端常见字段：`mcpServers.command + args + cwd + env`
+- OpenCode 字段：`mcp.<name>.type=local + command[] + environment`
+- 两者启动的是同一个本地 MCP server，差异只在客户端配置 schema，不是服务端能力差异
+- 图片生成务必保留较长的客户端侧 `timeout`，推荐 `500000` 毫秒
+
+### 方式三：Streamable HTTP 远程接入
 
 先启动服务：
 
@@ -167,7 +217,7 @@ uv run image-generate-mcp-remote --transport streamable-http --host 127.0.0.1 --
 
 上面的 `timeout` 不要省略。注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。文档示例推荐值为 `500000` 毫秒（500 秒），用于覆盖常规重试场景。
 
-### 方式三：SSE 远程接入
+### 方式四：SSE 远程接入
 
 先启动服务：
 

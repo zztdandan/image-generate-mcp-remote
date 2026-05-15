@@ -1,270 +1,36 @@
-"""Official-style Gemini generateContent image tool implementation."""
+"""Thin MCP-boundary wrapper for the active Nano Banana preset."""
 
 from __future__ import annotations
 
-import base64
-import time
 from typing import Literal
 
-import httpx
-from pydantic import BaseModel, Field, model_validator
-
 from ..contracts.enums import ImageResponseModality, ImageThinkingLevel
-from ..contracts.image_size import ImageAspectRatio, ImageSizeTier, SupportedImageSize, resolve_supported_size_selection
-from ..contracts.requests import EditImageRequestBase, GenerateImageRequestBase
-from ..config import (
-    DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-    DEFAULT_TOOL_RETRY_COUNT,
-    NANO_BANANA_2_OFFICIAL_NAME,
-    ToolRuntimeConfig,
-    get_settings,
-)
-from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
-from ..models.common import ImageToolMode, ImageToolResult, InputImage, ResolvedInputImage, ToolVersion, UsageInfo
-from ..storage import build_image_uri, require_image_dimensions, save_image_bytes_to_path
-from .gpt_image_2_official import _resolve_input_image
-
-NANO_BANANA_RESPONSE_EXCERPT_LIMIT = 400
-RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
-
+from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
+from ..contracts.presets import PresetToolName
+from ..models.common import ImageToolMode, ImageToolResult, InputImage, ToolVersion
+from ..presets.base import BaseNanoBananaPreset
+from ..presets.loader import resolve_preset_for_tool
+from ..presets.models import NanoBananaEditExecutionRequest, NanoBananaGenerateExecutionRequest
+from ..config import get_settings
 
 ResponseModality = ImageResponseModality
 NanoBananaAspectRatio = ImageAspectRatio
 NanoBananaImageSize = ImageSizeTier
 NanoBananaThinkingLevel = ImageThinkingLevel
 
-
-class NanoBananaGenerateRequest(GenerateImageRequestBase):
-    """Generate mode contract for nano_banana_2_official."""
-
-    api_key: str | None = None
-    base_url: str | None = None
-    response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
-    aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
-    image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K
-    thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL
-    include_thoughts: bool = False
-
-    @model_validator(mode="after")
-    def validate_modalities(self) -> "NanoBananaGenerateRequest":
-        _validate_response_modalities(self.response_modalities)
-        resolve_supported_size_selection(self.image_size, self.aspect_ratio)
-        return self
-
-
-class NanoBananaEditRequest(EditImageRequestBase):
-    """Edit mode contract for nano_banana_2_official."""
-
-    api_key: str | None = None
-    base_url: str | None = None
-    input_images: list[InputImage]
-    response_modalities: list[ResponseModality] = Field(default_factory=lambda: [ResponseModality.IMAGE])
-    aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE
-    image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K
-    thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL
-    include_thoughts: bool = False
-
-    @model_validator(mode="after")
-    def validate_contract(self) -> "NanoBananaEditRequest":
-        _validate_response_modalities(self.response_modalities)
-        if not self.input_images:
-            raise ValueError("input_images must contain at least one item")
-        resolve_supported_size_selection(self.image_size, self.aspect_ratio)
-        return self
-
-
-class NanoBananaSizeConfig(BaseModel):
-    """Resolved size preferences for Gemini-compatible payloads."""
-
-    aspect_ratio: NanoBananaAspectRatio
-    image_size: NanoBananaImageSize
-
-
-def _resolve_size_config(image_size: ImageSizeTier, aspect_ratio: ImageAspectRatio) -> NanoBananaSizeConfig:
-    """Map one shared size selection into Nano Banana config enums."""
-
-    preset: SupportedImageSize = resolve_supported_size_selection(image_size, aspect_ratio)
-    return NanoBananaSizeConfig(
-        aspect_ratio=_map_aspect_ratio(preset.aspect_ratio),
-        image_size=_map_image_size(preset.tier),
-    )
-
-
-def _map_aspect_ratio(aspect_ratio: ImageAspectRatio) -> NanoBananaAspectRatio:
-    return aspect_ratio
-
-
-def _map_image_size(size_tier: ImageSizeTier) -> NanoBananaImageSize:
-    return size_tier
-
-
-def _build_endpoint(runtime_config: ToolRuntimeConfig, model_name: str) -> str:
-    return f"{runtime_config.effective_base_url.rstrip('/')}/v1beta/models/{model_name}:generateContent"
-
-
-def _build_headers(runtime_config: ToolRuntimeConfig) -> dict[str, str]:
-    if not runtime_config.api_key:
-        raise ConfigError(runtime_config.tool_name, "config", "missing API key")
-    return {
-        "Authorization": f"Bearer {runtime_config.api_key}",
-        "Content-Type": "application/json",
-        "x-goog-api-key": runtime_config.api_key,
-    }
-
-
 def _validate_response_modalities(response_modalities: list[ResponseModality]) -> None:
     if ResponseModality.IMAGE not in response_modalities:
         raise ValueError("response_modalities must include IMAGE")
 
 
-def _image_part(resolved_image: ResolvedInputImage) -> dict[str, dict[str, str]]:
-    return {
-        "inlineData": {
-            "mimeType": resolved_image.mime_type,
-            "data": base64.b64encode(resolved_image.data).decode("utf-8"),
-        }
-    }
+def _active_nano_banana_preset() -> BaseNanoBananaPreset:
+    """Resolve the startup-selected Nano Banana preset for this process."""
 
-
-def _payload(
-    prompt: str,
-    response_modalities: list[ResponseModality],
-    size_config: NanoBananaSizeConfig,
-    thinking_level: NanoBananaThinkingLevel,
-    include_thoughts: bool,
-    inline_images: list[ResolvedInputImage],
-) -> dict[str, object]:
-    parts: list[dict[str, object]] = [{"text": prompt}]
-    for input_image in inline_images:
-        parts.append(_image_part(input_image))
-
-    image_config: dict[str, str] = {}
-    image_config["aspectRatio"] = size_config.aspect_ratio.value
-    image_config["imageSize"] = size_config.image_size.value
-
-    payload: dict[str, object] = {
-        "contents": [{"parts": parts}],
-        "generationConfig": {
-            "responseModalities": [modality.value for modality in response_modalities],
-            "imageConfig": image_config,
-        },
-        "thinkingConfig": {
-            "thinkingLevel": thinking_level.value,
-            "includeThoughts": include_thoughts,
-        },
-    }
-    return payload
-
-
-def _usage_info(response_json: dict[str, object]) -> UsageInfo | None:
-    usage_metadata = response_json.get("usageMetadata")
-    if not isinstance(usage_metadata, dict):
-        return None
-    prompt_token_count = usage_metadata.get("promptTokenCount")
-    candidates_token_count = usage_metadata.get("candidatesTokenCount")
-    total_token_count = usage_metadata.get("totalTokenCount")
-    return UsageInfo(
-        input_tokens=prompt_token_count if isinstance(prompt_token_count, int) else None,
-        output_tokens=candidates_token_count if isinstance(candidates_token_count, int) else None,
-        total_tokens=total_token_count if isinstance(total_token_count, int) else None,
-    )
-
-
-def _provider_excerpt(response_json: dict[str, object]) -> dict[str, str]:
-    model_version = response_json.get("modelVersion")
-    response_id = response_json.get("responseId")
-    return {
-        "modelVersion": str(model_version)[:NANO_BANANA_RESPONSE_EXCERPT_LIMIT] if model_version is not None else "",
-        "responseId": str(response_id)[:NANO_BANANA_RESPONSE_EXCERPT_LIMIT] if response_id is not None else "",
-    }
-
-
-def _parse_response(
-    mode: ImageToolMode,
-    response_json: dict[str, object],
-    provider_model: str,
-    include_text_output: bool,
-    save_path: str,
-    elapsed_seconds: float,
-) -> ImageToolResult:
-    candidates = response_json.get("candidates")
-    if not isinstance(candidates, list) or not candidates:
-        raise ResponseParseError(NANO_BANANA_2_OFFICIAL_NAME, mode.value, "response.candidates is missing")
-
-    text_fragments: list[str] = []
-    for candidate in candidates:
-        if not isinstance(candidate, dict):
-            continue
-        content = candidate.get("content")
-        if not isinstance(content, dict):
-            continue
-        parts = content.get("parts")
-        if not isinstance(parts, list):
-            continue
-        for part in parts:
-            if not isinstance(part, dict):
-                continue
-            inline_data = part.get("inlineData")
-            if not isinstance(inline_data, dict):
-                inline_data = part.get("inline_data")
-            if isinstance(inline_data, dict):
-                mime_type = inline_data.get("mimeType")
-                if not isinstance(mime_type, str):
-                    mime_type = inline_data.get("mime_type")
-                data = inline_data.get("data")
-                if isinstance(mime_type, str) and isinstance(data, str) and data:
-                    image_bytes = base64.b64decode(data)
-                    width, height = require_image_dimensions(NANO_BANANA_2_OFFICIAL_NAME, mode.value, image_bytes)
-                    file_path = save_image_bytes_to_path(image_bytes, save_path)
-                    return ImageToolResult(
-                        tool_name=NANO_BANANA_2_OFFICIAL_NAME,
-                        tool_version=ToolVersion.V1,
-                        mode=mode,
-                        provider_model=provider_model,
-                        file_path=str(file_path),
-                        image_uri=build_image_uri(file_path),
-                        mime_type=mime_type,
-                        elapsed_seconds=elapsed_seconds,
-                        width=width,
-                        height=height,
-                        usage=_usage_info(response_json),
-                        provider_response_excerpt=_provider_excerpt(response_json),
-                        text_output="\n".join(text_fragments) if include_text_output and text_fragments else None,
-                    )
-            text_value = part.get("text")
-            if include_text_output and isinstance(text_value, str) and text_value:
-                text_fragments.append(text_value)
-
-    raise ResponseParseError(NANO_BANANA_2_OFFICIAL_NAME, mode.value, "response missing candidates[].content.parts[].inlineData.data")
-
-
-def _handle_upstream_response(mode: ImageToolMode, response: httpx.Response) -> dict[str, object]:
-    if response.is_error:
-        raise UpstreamServiceError(
-            NANO_BANANA_2_OFFICIAL_NAME,
-            mode.value,
-            UpstreamErrorDetail(status_code=response.status_code, body_excerpt=response.text[:NANO_BANANA_RESPONSE_EXCERPT_LIMIT]),
-        )
-    payload = response.json()
-    if not isinstance(payload, dict):
-        raise ResponseParseError(NANO_BANANA_2_OFFICIAL_NAME, mode.value, "provider response is not a JSON object")
-    return payload
-
-
-def _post_generate_once(
-    runtime_config: ToolRuntimeConfig,
-    provider_model: str,
-    payload: dict[str, object],
-    timeout_seconds: float,
-) -> httpx.Response:
-    """Send one generateContent request to the upstream Gemini endpoint."""
-
-    return httpx.post(
-        _build_endpoint(runtime_config, provider_model),
-        headers=_build_headers(runtime_config),
-        json=payload,
-        timeout=timeout_seconds,
-    )
+    settings = get_settings()
+    preset = resolve_preset_for_tool(PresetToolName.NANO_BANANA_2_OFFICIAL, settings.nano_banana_2_official_preset)
+    if not isinstance(preset, BaseNanoBananaPreset):
+        raise TypeError("active nano_banana_2_official preset must inherit BaseNanoBananaPreset")
+    return preset
 
 
 def nano_banana_2_official_generate(
@@ -272,81 +38,27 @@ def nano_banana_2_official_generate(
     mode: Literal[ImageToolMode.GENERATE],
     prompt: str,
     save_path: str,
-    api_key: str | None = None,
-    base_url: str | None = None,
-    model: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
-    aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
-    image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
+    aspect_ratio: NanoBananaAspectRatio = NanoBananaAspectRatio.SQUARE,
+    image_size: NanoBananaImageSize = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
-    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
-    """Run the generate mode for nano_banana_2_official."""
+    """Run generate mode through the active preset runtime."""
 
-    request = NanoBananaGenerateRequest(
+    execution_request = NanoBananaGenerateExecutionRequest(
         version=version,
         mode=mode,
         prompt=prompt,
         save_path=save_path,
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
         aspect_ratio=aspect_ratio,
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
-        timeout_seconds=timeout_seconds,
-        retry_count=retry_count,
     )
-    runtime_config = get_settings().nano_banana_2_official_config(
-        api_key_override=request.api_key,
-        base_url_override=request.base_url,
-        model_override=request.model,
-    )
-    provider_model: str = request.model or runtime_config.effective_model
-    if provider_model not in runtime_config.supported_models_effective:
-        raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
-
-    size_config = _resolve_size_config(request.image_size, request.aspect_ratio)
-
-    total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
-    request_payload: dict[str, object] = _payload(
-        prompt=request.prompt,
-        response_modalities=request.response_modalities,
-        size_config=size_config,
-        thinking_level=request.thinking_level,
-        include_thoughts=request.include_thoughts,
-        inline_images=[],
-    )
-    started_at: float = time.perf_counter()
-    last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
-    response_json: dict[str, object] | None = None
-    for attempt in range(1, total_attempts + 1):
-        try:
-            response = _post_generate_once(runtime_config, provider_model, request_payload, request.timeout_seconds)
-            response_json = _handle_upstream_response(request.mode, response)
-            break
-        except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
-            last_error = exc
-            if attempt == total_attempts:
-                raise
-
-    if response_json is None:
-        assert last_error is not None
-        raise last_error
-
-    elapsed_seconds: float = time.perf_counter() - started_at
-    return _parse_response(
-        request.mode,
-        response_json,
-        provider_model,
-        ResponseModality.TEXT in request.response_modalities,
-        request.save_path,
-        elapsed_seconds,
-    )
+    _validate_response_modalities(execution_request.response_modalities)
+    return _active_nano_banana_preset().execute_nano_banana(execution_request, get_settings().nano_banana_2_official_api_key)
 
 
 def nano_banana_2_official_edit(
@@ -355,79 +67,27 @@ def nano_banana_2_official_edit(
     prompt: str,
     save_path: str,
     input_images: list[InputImage],
-    api_key: str | None = None,
-    base_url: str | None = None,
-    model: str | None = None,
     response_modalities: list[ResponseModality] | None = None,
-    aspect_ratio: NanoBananaAspectRatio | None = NanoBananaAspectRatio.SQUARE,
-    image_size: NanoBananaImageSize | None = NanoBananaImageSize.SIZE_1K,
+    aspect_ratio: NanoBananaAspectRatio = NanoBananaAspectRatio.SQUARE,
+    image_size: NanoBananaImageSize = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
-    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
-    """Run the edit mode for nano_banana_2_official."""
+    """Run edit mode through the active preset runtime."""
 
-    request = NanoBananaEditRequest(
+    execution_request = NanoBananaEditExecutionRequest(
         version=version,
         mode=mode,
         prompt=prompt,
         save_path=save_path,
         input_images=input_images,
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
         response_modalities=response_modalities or [ResponseModality.IMAGE],
         aspect_ratio=aspect_ratio,
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
-        timeout_seconds=timeout_seconds,
-        retry_count=retry_count,
     )
-    runtime_config = get_settings().nano_banana_2_official_config(
-        api_key_override=request.api_key,
-        base_url_override=request.base_url,
-        model_override=request.model,
-    )
-    provider_model: str = request.model or runtime_config.effective_model
-    if provider_model not in runtime_config.supported_models_effective:
-        raise ValidationError(NANO_BANANA_2_OFFICIAL_NAME, request.mode.value, "requested model is not supported")
-
-    resolved_images: list[ResolvedInputImage] = [_resolve_input_image(image) for image in request.input_images]
-    size_config = _resolve_size_config(request.image_size, request.aspect_ratio)
-    total_attempts: int = request.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
-    request_payload: dict[str, object] = _payload(
-        prompt=request.prompt,
-        response_modalities=request.response_modalities,
-        size_config=size_config,
-        thinking_level=request.thinking_level,
-        include_thoughts=request.include_thoughts,
-        inline_images=resolved_images,
-    )
-    started_at: float = time.perf_counter()
-    last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
-    response_json: dict[str, object] | None = None
-    for attempt in range(1, total_attempts + 1):
-        try:
-            response = _post_generate_once(runtime_config, provider_model, request_payload, request.timeout_seconds)
-            response_json = _handle_upstream_response(request.mode, response)
-            break
-        except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
-            last_error = exc
-            if attempt == total_attempts:
-                raise
-
-    if response_json is None:
-        assert last_error is not None
-        raise last_error
-
-    elapsed_seconds: float = time.perf_counter() - started_at
-    return _parse_response(
-        request.mode,
-        response_json,
-        provider_model,
-        ResponseModality.TEXT in request.response_modalities,
-        request.save_path,
-        elapsed_seconds,
-    )
+    _validate_response_modalities(execution_request.response_modalities)
+    if not execution_request.input_images:
+        raise ValueError("input_images must contain at least one item")
+    return _active_nano_banana_preset().execute_nano_banana(execution_request, get_settings().nano_banana_2_official_api_key)

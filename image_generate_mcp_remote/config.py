@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .contracts.presets import PresetToolName
 from .models.common import ImageToolMode, ToolVersion
 
 load_dotenv()
@@ -37,11 +38,13 @@ DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 180.0
 DEFAULT_TOOL_RETRY_COUNT = 3
 
 GPT_IMAGE_2_OFFICIAL_API_KEY_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY"
+GPT_IMAGE_2_OFFICIAL_PRESET_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_PRESET"
 GPT_IMAGE_2_OFFICIAL_BASE_URL_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL"
 GPT_IMAGE_2_OFFICIAL_MODEL_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_MODEL"
 GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS"
 
 NANO_BANANA_2_OFFICIAL_API_KEY_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY"
+NANO_BANANA_2_OFFICIAL_PRESET_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_PRESET"
 NANO_BANANA_2_OFFICIAL_BASE_URL_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL"
 NANO_BANANA_2_OFFICIAL_MODEL_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_MODEL"
 NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS"
@@ -61,6 +64,7 @@ class ToolEnvironmentNames(BaseModel):
     """Names of environment variables that influence one tool."""
 
     api_key: str
+    preset: str
     base_url: str
     model: str
     supported_models: str
@@ -85,6 +89,12 @@ class ToolRuntimeConfig(BaseModel):
     api_key: str
     api_key_configured: bool
     env_names: ToolEnvironmentNames
+    active_preset_id: str
+    active_preset_class: str
+    provider: str
+    protocol: str
+    stability: str
+    notes: list[str]
 
 
 def _parse_supported_models(raw_value: str | None, env_name: str) -> tuple[list[str], str]:
@@ -111,6 +121,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default=DEFAULT_LOG_LEVEL, alias=LOG_LEVEL_ENV)
 
     gpt_image_2_official_api_key: str = Field(default="", alias=GPT_IMAGE_2_OFFICIAL_API_KEY_ENV)
+    gpt_image_2_official_preset: str | None = Field(default=None, alias=GPT_IMAGE_2_OFFICIAL_PRESET_ENV)
     gpt_image_2_official_base_url: str | None = Field(default=None, alias=GPT_IMAGE_2_OFFICIAL_BASE_URL_ENV)
     gpt_image_2_official_model: str | None = Field(default=None, alias=GPT_IMAGE_2_OFFICIAL_MODEL_ENV)
     gpt_image_2_official_supported_models_raw: str | None = Field(
@@ -119,6 +130,7 @@ class Settings(BaseSettings):
     )
 
     nano_banana_2_official_api_key: str = Field(default="", alias=NANO_BANANA_2_OFFICIAL_API_KEY_ENV)
+    nano_banana_2_official_preset: str | None = Field(default=None, alias=NANO_BANANA_2_OFFICIAL_PRESET_ENV)
     nano_banana_2_official_base_url: str | None = Field(default=None, alias=NANO_BANANA_2_OFFICIAL_BASE_URL_ENV)
     nano_banana_2_official_model: str | None = Field(default=None, alias=NANO_BANANA_2_OFFICIAL_MODEL_ENV)
     nano_banana_2_official_supported_models_raw: str | None = Field(
@@ -133,88 +145,80 @@ class Settings(BaseSettings):
 
         return value.upper()
 
-    def gpt_image_2_official_config(
-        self,
-        *,
-        api_key_override: str | None = None,
-        base_url_override: str | None = None,
-        model_override: str | None = None,
-    ) -> ToolRuntimeConfig:
+    def gpt_image_2_official_config(self) -> ToolRuntimeConfig:
         """Build effective config for the OpenAI Images compatible tool."""
 
-        supported_models, source = _parse_supported_models(
-            self.gpt_image_2_official_supported_models_raw,
-            GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_ENV,
-        )
-        effective_supported_models: list[str] = (
-            supported_models if supported_models else list(GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT)
-        )
-        effective_base_url: str = base_url_override or self.gpt_image_2_official_base_url or GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL
-        effective_model: str = model_override or self.gpt_image_2_official_model or GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL
-        effective_api_key: str = api_key_override or self.gpt_image_2_official_api_key
+        from .presets.loader import resolve_preset_for_tool
+
+        preset = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, self.gpt_image_2_official_preset)
+        resolved = preset.resolve()
+        effective_api_key: str = self.gpt_image_2_official_api_key
         return ToolRuntimeConfig(
             tool_name=GPT_IMAGE_2_OFFICIAL_NAME,
             modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
-            protocol_style="openai-images",
-            default_base_url=GPT_IMAGE_2_OFFICIAL_DEFAULT_BASE_URL,
-            effective_base_url=effective_base_url,
-            base_url_source="argument" if base_url_override else ("env" if self.gpt_image_2_official_base_url else "default"),
-            default_model=GPT_IMAGE_2_OFFICIAL_DEFAULT_MODEL,
-            effective_model=effective_model,
-            model_source="argument" if model_override else ("env" if self.gpt_image_2_official_model else "default"),
-            supported_models_default=list(GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT),
-            supported_models_effective=effective_supported_models,
-            supported_models_source=source,
+            protocol_style=resolved.config.protocol.value,
+            default_base_url=resolved.config.base_url,
+            effective_base_url=resolved.config.base_url,
+            base_url_source="preset",
+            default_model=resolved.config.model,
+            effective_model=resolved.config.model,
+            model_source="preset",
+            supported_models_default=[resolved.config.model],
+            supported_models_effective=[resolved.config.model],
+            supported_models_source="preset",
             api_key=effective_api_key,
             api_key_configured=bool(effective_api_key),
             env_names=ToolEnvironmentNames(
                 api_key=GPT_IMAGE_2_OFFICIAL_API_KEY_ENV,
+                preset=GPT_IMAGE_2_OFFICIAL_PRESET_ENV,
                 base_url=GPT_IMAGE_2_OFFICIAL_BASE_URL_ENV,
                 model=GPT_IMAGE_2_OFFICIAL_MODEL_ENV,
                 supported_models=GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS_ENV,
             ),
+            active_preset_id=resolved.config.preset_id,
+            active_preset_class=resolved.preset_class,
+            provider=resolved.config.provider.value,
+            protocol=resolved.config.protocol.value,
+            stability=resolved.config.stability.value,
+            notes=list(resolved.config.notes),
         )
 
-    def nano_banana_2_official_config(
-        self,
-        *,
-        api_key_override: str | None = None,
-        base_url_override: str | None = None,
-        model_override: str | None = None,
-    ) -> ToolRuntimeConfig:
+    def nano_banana_2_official_config(self) -> ToolRuntimeConfig:
         """Build effective config for the Gemini compatible tool."""
 
-        supported_models, source = _parse_supported_models(
-            self.nano_banana_2_official_supported_models_raw,
-            NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_ENV,
-        )
-        effective_supported_models: list[str] = (
-            supported_models if supported_models else list(NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT)
-        )
-        effective_base_url: str = base_url_override or self.nano_banana_2_official_base_url or NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL
-        effective_model: str = model_override or self.nano_banana_2_official_model or NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL
-        effective_api_key: str = api_key_override or self.nano_banana_2_official_api_key
+        from .presets.loader import resolve_preset_for_tool
+
+        preset = resolve_preset_for_tool(PresetToolName.NANO_BANANA_2_OFFICIAL, self.nano_banana_2_official_preset)
+        resolved = preset.resolve()
+        effective_api_key: str = self.nano_banana_2_official_api_key
         return ToolRuntimeConfig(
             tool_name=NANO_BANANA_2_OFFICIAL_NAME,
             modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
-            protocol_style="gemini-generate-content",
-            default_base_url=NANO_BANANA_2_OFFICIAL_DEFAULT_BASE_URL,
-            effective_base_url=effective_base_url,
-            base_url_source="argument" if base_url_override else ("env" if self.nano_banana_2_official_base_url else "default"),
-            default_model=NANO_BANANA_2_OFFICIAL_DEFAULT_MODEL,
-            effective_model=effective_model,
-            model_source="argument" if model_override else ("env" if self.nano_banana_2_official_model else "default"),
-            supported_models_default=list(NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_DEFAULT),
-            supported_models_effective=effective_supported_models,
-            supported_models_source=source,
+            protocol_style=resolved.config.protocol.value,
+            default_base_url=resolved.config.base_url,
+            effective_base_url=resolved.config.base_url,
+            base_url_source="preset",
+            default_model=resolved.config.model,
+            effective_model=resolved.config.model,
+            model_source="preset",
+            supported_models_default=[resolved.config.model],
+            supported_models_effective=[resolved.config.model],
+            supported_models_source="preset",
             api_key=effective_api_key,
             api_key_configured=bool(effective_api_key),
             env_names=ToolEnvironmentNames(
                 api_key=NANO_BANANA_2_OFFICIAL_API_KEY_ENV,
+                preset=NANO_BANANA_2_OFFICIAL_PRESET_ENV,
                 base_url=NANO_BANANA_2_OFFICIAL_BASE_URL_ENV,
                 model=NANO_BANANA_2_OFFICIAL_MODEL_ENV,
                 supported_models=NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS_ENV,
             ),
+            active_preset_id=resolved.config.preset_id,
+            active_preset_class=resolved.preset_class,
+            provider=resolved.config.provider.value,
+            protocol=resolved.config.protocol.value,
+            stability=resolved.config.stability.value,
+            notes=list(resolved.config.notes),
         )
 
     gpt_image_2_url_api_key: str = Field(default="", alias=GPT_IMAGE_2_URL_API_KEY_ENV)
@@ -252,10 +256,17 @@ class Settings(BaseSettings):
             api_key_configured=bool(self.gpt_image_2_url_api_key),
             env_names=ToolEnvironmentNames(
                 api_key=GPT_IMAGE_2_URL_API_KEY_ENV,
+                preset=GPT_IMAGE_2_OFFICIAL_PRESET_ENV,
                 base_url=GPT_IMAGE_2_URL_BASE_URL_ENV,
                 model=GPT_IMAGE_2_URL_MODEL_ENV,
                 supported_models=GPT_IMAGE_2_URL_SUPPORTED_MODELS_ENV,
             ),
+            active_preset_id="gpt_image_2_url_compatibility",
+            active_preset_class="GptImage2UrlCompatibilityWrapper",
+            provider="right_codes",
+            protocol="openai_images",
+            stability="stable",
+            notes=["Compatibility wrapper retained for the legacy gpt-image-2-url tool."],
         )
 
 
@@ -264,3 +275,12 @@ def get_settings() -> Settings:
     """Return cached settings to keep runtime reads stable."""
 
     return Settings()
+
+
+def clear_runtime_caches() -> None:
+    """Clear cached settings and presets for tests or process-local reloads."""
+
+    from .presets.loader import clear_preset_cache
+
+    get_settings.cache_clear()
+    clear_preset_cache()

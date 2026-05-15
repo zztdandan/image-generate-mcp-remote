@@ -58,7 +58,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
             }
         )
 
-    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", fake_post)
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
 
     result = nano_banana_2_official_generate(
         version=ToolVersion.V1,
@@ -68,7 +68,6 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
         aspect_ratio=ImageAspectRatio.SQUARE,
         image_size=ImageSizeTier.SIZE_1K,
         response_modalities=[ResponseModality.IMAGE],
-        timeout_seconds=75,
     )
 
     assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
@@ -80,7 +79,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert captured["json"]["contents"] == [{"parts": [{"text": "make a fox"}]}]
     assert captured["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "1:1", "imageSize": "1K"}
-    assert captured["timeout"] == 75
+    assert captured["timeout"] == 180
     assert Path(result.file_path).exists()
     assert result.file_path.endswith("nano.png")
     assert result.elapsed_seconds >= 0
@@ -88,7 +87,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert result.height == 1
 
 
-def test_nano_generate_uses_runtime_overrides(monkeypatch, tmp_path: Path):
+def test_nano_generate_uses_active_preset_runtime(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "env-secret-key")
     captured: dict[str, object] = {}
 
@@ -103,25 +102,22 @@ def test_nano_generate_uses_runtime_overrides(monkeypatch, tmp_path: Path):
             }
         )
 
-    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", fake_post)
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
 
     result = nano_banana_2_official_generate(
         version=ToolVersion.V1,
         mode=ImageToolMode.GENERATE,
         prompt="make a mug",
         save_path=str(tmp_path / "override.png"),
-        api_key="arg-secret-key",
-        base_url="https://api.laozhang.ai",
-        model="gemini-3.1-flash-image-preview",
         aspect_ratio=ImageAspectRatio.SQUARE,
         image_size=ImageSizeTier.SIZE_2K,
     )
 
-    assert captured["url"] == "https://api.laozhang.ai/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
+    assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
     assert captured["headers"] == {
-        "Authorization": "Bearer arg-secret-key",
+        "Authorization": "Bearer env-secret-key",
         "Content-Type": "application/json",
-        "x-goog-api-key": "arg-secret-key",
+        "x-goog-api-key": "env-secret-key",
     }
     assert result.file_path.endswith("override.png")
 
@@ -139,7 +135,7 @@ def test_nano_parse_response_accepts_snake_case_inline_data(monkeypatch, tmp_pat
             }
         )
 
-    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", fake_post)
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
 
     result = nano_banana_2_official_generate(
         version=ToolVersion.V1,
@@ -179,7 +175,7 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
             }
         )
 
-    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", fake_post)
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
 
     result = nano_banana_2_official_edit(
         version=ToolVersion.V1,
@@ -233,7 +229,7 @@ def test_nano_uses_enum_size_selection(monkeypatch, tmp_path: Path):
             }
         )
 
-    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", fake_post)
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
 
     result = nano_banana_2_official_generate(
         version=ToolVersion.V1,
@@ -265,7 +261,7 @@ def test_nano_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
             }
         )
 
-    monkeypatch.setattr("image_generate_mcp_remote.tools.nano_banana_2_official.httpx.post", flaky_post)
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", flaky_post)
 
     result = nano_banana_2_official_generate(
         version=ToolVersion.V1,
@@ -273,7 +269,6 @@ def test_nano_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
         prompt="retry nano",
         save_path=str(tmp_path / "nano-retry.png"),
         response_modalities=[ResponseModality.IMAGE],
-        retry_count=3,
     )
 
     assert calls["post"] == 4

@@ -7,6 +7,8 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, Field
 
+from ..contracts.presets import ParameterGuidance, PresetStability, ToolKind
+
 JSONScalar: TypeAlias = str | int | float | bool | None
 JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
 JSONMap: TypeAlias = dict[str, JSONValue]
@@ -126,18 +128,24 @@ class ToolCatalogEntry(BaseModel):
 
     tool_name: str
     tool_version: ToolVersion
+    title: str
+    tool_kind: ToolKind = ToolKind.PRESET
     modes: list[ImageToolMode]
-    protocol_style: str
-    default_base_url: str
-    effective_base_url: str
-    default_model: str
-    effective_model: str
-    supported_models_default: list[str]
-    supported_models_effective: list[str]
+    active_preset_id: str | None = None
+    active_preset_class: str | None = None
+    stability: PresetStability
+    provider: str
+    protocol: str
+    base_url: str
+    model: str
+    model_parameter: ParameterGuidance
+    api_key_configured: bool
     supported_size_presets: list[str]
+    unsupported_size_presets: list[str]
+    parameter_guidance: dict[str, ParameterGuidance]
+    invalid_call_examples: list[str]
     env_vars: list[str]
     env_values_non_secret: ToolEnvValuesNonSecret
-    api_key_configured: bool
     notes: list[str]
 
 

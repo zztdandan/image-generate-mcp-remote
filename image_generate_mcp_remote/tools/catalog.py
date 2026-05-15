@@ -17,8 +17,10 @@ from ..config import (
     get_settings,
 )
 from ..contracts.image_size import SUPPORTED_IMAGE_SIZES, SupportedImageSize
+from ..contracts.presets import ParameterGuidance, PresetFieldDispatchMode, PresetStability, PresetToolName, ToolKind
 from ..errors import ValidationError
 from ..models.common import ToolCatalogEntry, ToolCatalogResponse, ToolEnvValuesNonSecret, ToolVersion
+from ..presets.loader import resolve_preset_for_tool
 from .gpt_image_2_url import GPT_IMAGE_2_URL_ALLOWED_SIZES
 
 CATALOG_TOOL_NAME = "list_image_tools_catalog"
@@ -64,23 +66,117 @@ def _supported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
     return [f"{preset.tier.value} + {preset.aspect_ratio.value} (gpt={preset.gpt_value})" for preset in size_presets]
 
 
+def _unsupported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
+    if runtime_config.tool_name not in {"gpt_image_2_official", "nano_banana_2_official"}:
+        return []
+    preset_tool_name = PresetToolName(runtime_config.tool_name)
+    preset_env = (
+        get_settings().gpt_image_2_official_preset
+        if preset_tool_name is PresetToolName.GPT_IMAGE_2_OFFICIAL
+        else get_settings().nano_banana_2_official_preset
+    )
+    preset = resolve_preset_for_tool(preset_tool_name, preset_env)
+    return [
+        f"{item.image_size.value} + {item.aspect_ratio.value}"
+        for item in preset.resolve().config.unsupported_sizes
+    ]
+
+
+def _guidance_for_formal_tool(runtime_config: ToolRuntimeConfig) -> dict[str, ParameterGuidance]:
+    preset_tool_name = PresetToolName(runtime_config.tool_name)
+    preset_env = (
+        get_settings().gpt_image_2_official_preset
+        if preset_tool_name is PresetToolName.GPT_IMAGE_2_OFFICIAL
+        else get_settings().nano_banana_2_official_preset
+    )
+    preset = resolve_preset_for_tool(preset_tool_name, preset_env)
+    resolved = preset.resolve()
+    return {
+        "model": ParameterGuidance(
+            accepted_by_mcp=False,
+            allowed_by_preset=False,
+            locked_value=resolved.config.model,
+            guidance="model is preset-owned; do not pass model per call",
+        ),
+        "mode": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            allowed_values=[mode.value for mode in resolved.config.modes],
+            guidance="mode must be one of the active preset modes",
+        ),
+        "quality": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            upstream_behavior=resolved.config.dispatch.quality,
+            guidance="quality remains in the MCP schema; the active preset decides whether it is sent, dropped, or moved into the prompt",
+        ),
+        "image_size": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            allowed_values=sorted({preset_item.tier.value for preset_item in resolved.supported_sizes}),
+            must_pair_with="aspect_ratio",
+            upstream_behavior=resolved.config.dispatch.size,
+            guidance="image_size must be paired with aspect_ratio and must appear in supported_size_presets",
+        ),
+        "aspect_ratio": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            allowed_values=sorted({preset_item.aspect_ratio.value for preset_item in resolved.supported_sizes}),
+            must_pair_with="image_size",
+            upstream_behavior=resolved.config.dispatch.size,
+            guidance="aspect_ratio must be paired with image_size and must appear in supported_size_presets",
+        ),
+    }
+
+
+def _guidance_for_compatibility_tool(runtime_config: ToolRuntimeConfig) -> dict[str, ParameterGuidance]:
+    return {
+        "model": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            locked_value=runtime_config.effective_model,
+            guidance="legacy compatibility wrapper still accepts model and validates it against supported models",
+        ),
+        "image_size": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            upstream_behavior=PresetFieldDispatchMode.SEND,
+            guidance="only benchmark-verified size pairs listed in supported_size_presets are accepted",
+        ),
+    }
+
+
 def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
     """Build one catalog entry from runtime config."""
 
+    is_formal_tool = runtime_config.tool_name in {"gpt_image_2_official", "nano_banana_2_official"}
+    parameter_guidance = _guidance_for_formal_tool(runtime_config) if is_formal_tool else _guidance_for_compatibility_tool(runtime_config)
     return ToolCatalogEntry(
         tool_name=runtime_config.tool_name,
         tool_version=runtime_config.tool_version,
+        title=runtime_config.tool_name.replace("_", " ").replace("-", " ").title(),
+        tool_kind=ToolKind.PRESET if is_formal_tool else ToolKind.COMPATIBILITY,
         modes=list(runtime_config.modes),
-        protocol_style=runtime_config.protocol_style,
-        default_base_url=runtime_config.default_base_url,
-        effective_base_url=runtime_config.effective_base_url,
-        default_model=runtime_config.default_model,
-        effective_model=runtime_config.effective_model,
-        supported_models_default=list(runtime_config.supported_models_default),
-        supported_models_effective=list(runtime_config.supported_models_effective),
+        active_preset_id=runtime_config.active_preset_id,
+        active_preset_class=runtime_config.active_preset_class,
+        stability=PresetStability(runtime_config.stability),
+        provider=runtime_config.provider,
+        protocol=runtime_config.protocol,
+        base_url=runtime_config.effective_base_url,
+        model=runtime_config.effective_model,
+        model_parameter=parameter_guidance["model"],
+        api_key_configured=runtime_config.api_key_configured,
         supported_size_presets=_supported_size_presets(runtime_config),
+        unsupported_size_presets=_unsupported_size_presets(runtime_config),
+        parameter_guidance=parameter_guidance,
+        invalid_call_examples=[
+            "Do not pass model, base_url, api_key, timeout_seconds, retry_count, send_size, or send_quality to formal preset tools."
+            if is_formal_tool
+            else "For gpt-image-2-url, choose only size pairs listed in supported_size_presets."
+        ],
         env_vars=[
             runtime_config.env_names.api_key,
+            runtime_config.env_names.preset,
             runtime_config.env_names.base_url,
             runtime_config.env_names.model,
             runtime_config.env_names.supported_models,
@@ -90,10 +186,9 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
             LOG_LEVEL_ENV,
         ],
         env_values_non_secret=_non_secret_values(runtime_config),
-        api_key_configured=runtime_config.api_key_configured,
         notes=[
             "Catalog omits API key values and any masked derivatives.",
-            "Supported models come from code defaults plus optional env override.",
+            *runtime_config.notes,
         ],
     )
 
