@@ -258,7 +258,7 @@ wheels = [
 
 [[package]]
 name = "image-generate-mcp-remote"
-version = "0.9.6"
+version = "0.9.9"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
