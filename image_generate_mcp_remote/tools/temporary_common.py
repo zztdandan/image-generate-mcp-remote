@@ -1,4 +1,4 @@
-"""Maximum-compatible output extraction for temporary image provider tools."""
+"""temporary_common 模块用于跨工具通用数据模型，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,12 @@ DATA_URL_PATTERN = re.compile(r"data:(image/[^;]+);base64,([A-Za-z0-9+/=\s]+)")
 
 
 def extract_json_image_output(payload: dict[str, object]) -> tuple[str | None, str | None]:
-    """Return the first base64 payload or URL from common image provider responses."""
+    """执行 extract_json_image_output，用于 跨工具通用数据模型 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：提取上游响应中的目标字段
+        - 步骤 2：定位目标字段并返回可消费值
+    """
 
     data_items = payload.get("data")
     if isinstance(data_items, list):
@@ -60,7 +65,12 @@ def extract_json_image_output(payload: dict[str, object]) -> tuple[str | None, s
 
 
 def extract_text_image_output(text: str) -> tuple[str | None, str | None]:
-    """Scan markdown, data URL, and plain URL text for a usable image output."""
+    """执行 extract_text_image_output，用于 跨工具通用数据模型 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：提取上游响应中的目标字段
+        - 步骤 2：定位目标字段并返回可消费值
+    """
 
     data_url_match = DATA_URL_PATTERN.search(text)
     if data_url_match is not None:
@@ -82,7 +92,12 @@ def persist_temporary_output(
     elapsed_seconds: float,
     provider_model: str,
 ) -> ImageToolResult:
-    """Persist a temporary tool response after scanning common image output shapes."""
+    """执行 persist_temporary_output，用于 跨工具通用数据模型 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：保存图片结果到目标存储路径
+        - 步骤 2：写入内容并返回可追踪定位信息
+    """
 
     image_base64, image_url = extract_json_image_output(response_json)
     mime_type = "image/png"
@@ -117,6 +132,11 @@ def persist_temporary_output(
 
 
 def data_url_from_bytes(mime_type: str, image_bytes: bytes) -> str:
-    """Build a data URL for tests and temporary providers that return text."""
+    """执行 data_url_from_bytes，用于 跨工具通用数据模型 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"

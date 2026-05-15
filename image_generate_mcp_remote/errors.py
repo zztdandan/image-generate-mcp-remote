@@ -1,4 +1,4 @@
-"""Shared error types for image generation tools."""
+"""errors 模块用于统一错误建模，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -6,14 +6,24 @@ from pydantic import BaseModel
 
 
 class UpstreamErrorDetail(BaseModel):
-    """Truncated upstream error detail for safe reporting."""
+    """UpstreamErrorDetail 是 统一错误建模 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     status_code: int
     body_excerpt: str
 
 
 class ImageToolError(RuntimeError):
-    """Structured exception with tool and mode context."""
+    """ImageToolError 是 统一错误建模 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     def __init__(self, tool_name: str, mode: str, failure_kind: str, message: str) -> None:
         self.tool_name: str = tool_name
@@ -23,21 +33,36 @@ class ImageToolError(RuntimeError):
 
 
 class ConfigError(ImageToolError):
-    """Raised when local configuration is invalid or incomplete."""
+    """ConfigError 是 统一错误建模 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     def __init__(self, tool_name: str, mode: str, message: str) -> None:
         super().__init__(tool_name, mode, "configuration error", message)
 
 
 class ValidationError(ImageToolError):
-    """Raised when local request validation fails."""
+    """ValidationError 是 统一错误建模 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     def __init__(self, tool_name: str, mode: str, message: str) -> None:
         super().__init__(tool_name, mode, "local validation failed", message)
 
 
 class UpstreamServiceError(ImageToolError):
-    """Raised when an upstream HTTP call fails."""
+    """UpstreamServiceError 是 统一错误建模 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     def __init__(self, tool_name: str, mode: str, detail: UpstreamErrorDetail) -> None:
         super().__init__(
@@ -50,7 +75,12 @@ class UpstreamServiceError(ImageToolError):
 
 
 class ResponseParseError(ImageToolError):
-    """Raised when upstream returned an unexpected payload shape."""
+    """ResponseParseError 是 统一错误建模 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     def __init__(self, tool_name: str, mode: str, message: str) -> None:
         super().__init__(tool_name, mode, "response parse failed", message)

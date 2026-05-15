@@ -1,4 +1,4 @@
-"""Input image normalization shared by preset implementations."""
+"""input_images 模块用于preset 契约定义，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,12 @@ from ..models.common import InputImage, InputImageFromBase64, InputImageFromData
 
 
 def resolve_input_image(tool_name: str, input_image: InputImage) -> ResolvedInputImage:
-    """Normalize supported input image sources into bytes plus mime metadata."""
+    """执行 resolve_input_image，用于 preset 契约定义 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：解析并确定最终生效配置
+        - 步骤 2：合并输入来源后输出可执行结果
+    """
 
     if isinstance(input_image, InputImageFromPath):
         path_input = input_image

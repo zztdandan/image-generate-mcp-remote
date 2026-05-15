@@ -1,4 +1,4 @@
-"""LaoZhang image presets."""
+"""__init__ 模块用于preset 契约定义，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from .gpt_image_2_default import LaoZhangGptImage2DefaultPreset
 from .gpt_image_2_enterprise import LaoZhangGptImage2EnterprisePreset

@@ -1,4 +1,4 @@
-"""Common structured models shared across image tools."""
+"""common 模块用于跨工具通用数据模型，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -15,26 +15,46 @@ JSONMap: TypeAlias = dict[str, JSONValue]
 
 
 class ToolVersion(StrEnum):
-    """Supported request contract versions."""
+    """ToolVersion 是 跨工具通用数据模型 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     V1 = "v1"
 
 
 class ImageToolMode(StrEnum):
-    """Shared operation modes exposed by image tools."""
+    """ImageToolMode 是 跨工具通用数据模型 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     GENERATE = "generate"
     EDIT = "edit"
 
 
 class ImageToolStatus(StrEnum):
-    """Top-level tool execution status."""
+    """ImageToolStatus 是 跨工具通用数据模型 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     OK = "ok"
 
 
 class InputImageSourceType(StrEnum):
-    """Ways a caller can provide an input image."""
+    """InputImageSourceType 是 跨工具通用数据模型 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     PATH = "path"
     BASE64 = "base64"
@@ -42,7 +62,12 @@ class InputImageSourceType(StrEnum):
 
 
 class InputImageFromPath(BaseModel):
-    """Image reference pointing at a local file path."""
+    """InputImageFromPath 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     source_type: Literal[InputImageSourceType.PATH] = InputImageSourceType.PATH
     path: str
@@ -51,7 +76,12 @@ class InputImageFromPath(BaseModel):
 
 
 class InputImageFromBase64(BaseModel):
-    """Image payload provided as raw base64 content."""
+    """InputImageFromBase64 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     source_type: Literal[InputImageSourceType.BASE64] = InputImageSourceType.BASE64
     data_base64: str
@@ -60,7 +90,12 @@ class InputImageFromBase64(BaseModel):
 
 
 class InputImageFromDataUrl(BaseModel):
-    """Image payload provided as a data URL."""
+    """InputImageFromDataUrl 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     source_type: Literal[InputImageSourceType.DATA_URL] = InputImageSourceType.DATA_URL
     data_url: str
@@ -74,7 +109,12 @@ InputImage: TypeAlias = Annotated[
 
 
 class ResolvedInputImage(BaseModel):
-    """Normalized image content used internally by tool implementations."""
+    """ResolvedInputImage 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     mime_type: str
     filename: str
@@ -82,7 +122,12 @@ class ResolvedInputImage(BaseModel):
 
 
 class UsageInfo(BaseModel):
-    """Optional usage metadata returned by an upstream provider."""
+    """UsageInfo 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -90,7 +135,12 @@ class UsageInfo(BaseModel):
 
 
 class ImageToolResult(BaseModel):
-    """Uniform high-level image tool result for MCP clients."""
+    """ImageToolResult 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     status: ImageToolStatus = Field(default=ImageToolStatus.OK)
     tool_name: str
@@ -109,7 +159,12 @@ class ImageToolResult(BaseModel):
 
 
 class ToolEnvValuesNonSecret(BaseModel):
-    """Catalog-safe, non-secret effective values for one tool."""
+    """ToolEnvValuesNonSecret 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     base_url: str
     base_url_source: str
@@ -124,7 +179,12 @@ class ToolEnvValuesNonSecret(BaseModel):
 
 
 class ToolCatalogEntry(BaseModel):
-    """One catalog row describing a single tool contract."""
+    """ToolCatalogEntry 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     tool_name: str
     tool_version: ToolVersion
@@ -150,7 +210,12 @@ class ToolCatalogEntry(BaseModel):
 
 
 class ToolCatalogResponse(BaseModel):
-    """Catalog tool response covering the whole MCP image service."""
+    """ToolCatalogResponse 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     service_name: str
     service_version: str

@@ -1,4 +1,4 @@
-"""Thin MCP-boundary wrapper for the active Nano Banana preset."""
+"""nano_banana_2_official 模块用于preset 基类执行框架，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -24,7 +24,12 @@ def _validate_response_modalities(response_modalities: list[ResponseModality]) -
 
 
 def _active_nano_banana_preset() -> BaseNanoBananaPreset:
-    """Resolve the startup-selected Nano Banana preset for this process."""
+    """执行 _active_nano_banana_preset，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     settings = get_settings()
     preset = resolve_preset_for_tool(PresetToolName.NANO_BANANA_2_OFFICIAL, settings.nano_banana_2_official_preset)
@@ -44,7 +49,12 @@ def nano_banana_2_official_generate(
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
 ) -> ImageToolResult:
-    """Run generate mode through the active preset runtime."""
+    """执行 nano_banana_2_official_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行图片生成调用并产出结果
+        - 步骤 2：准备请求后调用上游并归一化返回
+    """
 
     execution_request = NanoBananaGenerateExecutionRequest(
         version=version,
@@ -73,7 +83,12 @@ def nano_banana_2_official_edit(
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
 ) -> ImageToolResult:
-    """Run edit mode through the active preset runtime."""
+    """执行 nano_banana_2_official_edit，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行图片编辑调用并产出结果
+        - 步骤 2：准备编辑载荷后调用上游并归一化返回
+    """
 
     execution_request = NanoBananaEditExecutionRequest(
         version=version,

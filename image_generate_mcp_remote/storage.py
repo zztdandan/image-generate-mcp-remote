@@ -1,4 +1,4 @@
-"""Image output persistence and URI generation helpers."""
+"""storage 模块用于图片落盘与尺寸解析，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -22,7 +22,12 @@ DEFAULT_OUTPUT_DIR = "storage/images"
 
 
 def ensure_output_dir() -> Path:
-    """Create the configured output directory when needed."""
+    """执行 ensure_output_dir，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     path = Path(os.getenv(IMAGE_OUTPUT_DIR_ENV, DEFAULT_OUTPUT_DIR))
     path.mkdir(parents=True, exist_ok=True)
@@ -30,7 +35,12 @@ def ensure_output_dir() -> Path:
 
 
 def build_image_uri(path: Path) -> str:
-    """Build a public image URI or a local file URI."""
+    """执行 build_image_uri，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：构造当前步骤所需请求或返回对象
+        - 步骤 2：组装字段并产出稳定结构
+    """
 
     image_base_url = os.getenv(IMAGE_BASE_URL_ENV, "")
     if image_base_url:
@@ -39,7 +49,12 @@ def build_image_uri(path: Path) -> str:
 
 
 def _build_filename(mime_type: str) -> str:
-    """Generate a stable output filename using mime type as extension."""
+    """执行 _build_filename，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：构造当前步骤所需请求或返回对象
+        - 步骤 2：组装字段并产出稳定结构
+    """
 
     extension: str = OUTPUT_EXTENSION_BY_MIME.get(mime_type, ".bin")
     timestamp: str = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -47,7 +62,12 @@ def _build_filename(mime_type: str) -> str:
 
 
 def save_image_bytes(image_bytes: bytes, mime_type: str) -> Path:
-    """Persist image bytes to the configured output directory."""
+    """执行 save_image_bytes，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：保存图片结果到目标存储路径
+        - 步骤 2：写入内容并返回可追踪定位信息
+    """
 
     file_path = ensure_output_dir() / _build_filename(mime_type)
     file_path.write_bytes(image_bytes)
@@ -55,7 +75,12 @@ def save_image_bytes(image_bytes: bytes, mime_type: str) -> Path:
 
 
 def save_image_bytes_to_path(image_bytes: bytes, save_path: str) -> Path:
-    """Persist image bytes to a caller-provided path."""
+    """执行 save_image_bytes_to_path，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：保存图片结果到目标存储路径
+        - 步骤 2：写入内容并返回可追踪定位信息
+    """
 
     file_path = Path(save_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,7 +89,12 @@ def save_image_bytes_to_path(image_bytes: bytes, save_path: str) -> Path:
 
 
 def decode_base64_image(tool_name: str, mode: str, image_base64: str) -> bytes:
-    """Decode provider base64 output into raw bytes."""
+    """执行 decode_base64_image，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     try:
         return base64.b64decode(image_base64)
@@ -169,7 +199,12 @@ def _webp_dimensions(image_bytes: bytes) -> tuple[int, int] | None:
 
 
 def extract_image_dimensions(image_bytes: bytes) -> tuple[int, int] | None:
-    """Extract image dimensions from common image byte formats."""
+    """执行 extract_image_dimensions，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：提取上游响应中的目标字段
+        - 步骤 2：定位目标字段并返回可消费值
+    """
 
     for detector in (_png_dimensions, _jpeg_dimensions, _webp_dimensions):
         dimensions = detector(image_bytes)
@@ -179,7 +214,12 @@ def extract_image_dimensions(image_bytes: bytes) -> tuple[int, int] | None:
 
 
 def require_image_dimensions(tool_name: str, mode: str, image_bytes: bytes) -> tuple[int, int]:
-    """Extract image dimensions or fail when the payload cannot be parsed."""
+    """执行 require_image_dimensions，用于 图片落盘与尺寸解析 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     dimensions = extract_image_dimensions(image_bytes)
     if dimensions is None:

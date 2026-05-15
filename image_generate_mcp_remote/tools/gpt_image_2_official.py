@@ -1,4 +1,4 @@
-"""Thin MCP-boundary wrapper for the active GPT Image 2 preset."""
+"""gpt_image_2_official 模块用于preset 基类执行框架，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,12 @@ GptImageModeration = ImageModeration
 GptImageCount = ImageCount
 
 def _active_gpt_image_2_preset() -> BaseGptImage2Preset:
-    """Resolve the startup-selected GPT Image 2 preset for this process."""
+    """执行 _active_gpt_image_2_preset，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     settings = get_settings()
     preset = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, settings.gpt_image_2_official_preset)
@@ -43,7 +48,12 @@ def gpt_image_2_official_generate(
     moderation: GptImageModeration = GptImageModeration.AUTO,
     n: GptImageCount = GptImageCount.SINGLE,
 ) -> ImageToolResult:
-    """Run generate mode through the active preset runtime."""
+    """执行 gpt_image_2_official_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行图片生成调用并产出结果
+        - 步骤 2：准备请求后调用上游并归一化返回
+    """
 
     execution_request = GptImage2GenerateExecutionRequest(
         version=version,
@@ -76,7 +86,12 @@ def gpt_image_2_official_edit(
     output_compression: int | None = None,
     background: GptImageBackground = GptImageBackground.AUTO,
 ) -> ImageToolResult:
-    """Run edit mode through the active preset runtime."""
+    """执行 gpt_image_2_official_edit，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行图片编辑调用并产出结果
+        - 步骤 2：准备编辑载荷后调用上游并归一化返回
+    """
 
     execution_request = GptImage2EditExecutionRequest(
         version=version,

@@ -1,4 +1,4 @@
-"""Temporary Gemini generateContent-compatible exploration tool."""
+"""nano_banana_2_temporary 模块用于preset 基类执行框架，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -27,7 +27,12 @@ def nano_banana_2_temporary_generate(
     response_modalities: list[ImageResponseModality] | None = None,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
 ) -> ImageToolResult:
-    """Probe an unknown Gemini-compatible image site with conservative fields."""
+    """执行 nano_banana_2_temporary_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行图片生成调用并产出结果
+        - 步骤 2：准备请求后调用上游并归一化返回
+    """
 
     if version is not ToolVersion.V1:
         raise ValueError("only version v1 is supported")

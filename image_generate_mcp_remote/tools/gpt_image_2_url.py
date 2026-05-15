@@ -1,4 +1,4 @@
-"""URL-returning GPT image tool implementation."""
+"""gpt_image_2_url 模块用于preset 基类执行框架，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -67,7 +67,12 @@ GPT_IMAGE_2_URL_ALLOWED_KEYS: frozenset[tuple[ImageSizeTier, ImageAspectRatio]] 
 
 
 class GptImage2UrlGenerateRequest(PromptedImageRequestBase):
-    """Generate mode contract for the URL-returning gpt-image tool."""
+    """GptImage2UrlGenerateRequest 是 preset 基类执行框架 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     image: list[str] = Field(default_factory=list)
 
@@ -184,7 +189,12 @@ def _generate_and_download_once(runtime_config: ToolRuntimeConfig, request: GptI
 
 
 def _download_image_with_timeout(image_url: str, timeout_seconds: float) -> httpx.Response:
-    """Download the generated image with the caller-selected timeout."""
+    """执行 _download_image_with_timeout，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：下载上游图片内容用于本地落盘
+        - 步骤 2：执行请求并处理下载失败场景
+    """
 
     response = httpx.get(image_url, timeout=timeout_seconds, follow_redirects=True)
     if response.is_error:
@@ -207,7 +217,12 @@ def gpt_image_2_url_generate(
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
     retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 ) -> ImageToolResult:
-    """Run the URL-returning image endpoint and persist the downloaded image."""
+    """执行 gpt_image_2_url_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行图片生成调用并产出结果
+        - 步骤 2：准备请求后调用上游并归一化返回
+    """
 
     request = GptImage2UrlGenerateRequest(
         version=version,

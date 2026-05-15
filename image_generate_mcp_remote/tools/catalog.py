@@ -1,4 +1,4 @@
-"""Catalog tool describing exposed image-generation tools."""
+"""catalog 模块用于preset 基类执行框架，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -27,13 +27,23 @@ CATALOG_TOOL_NAME = "list_image_tools_catalog"
 
 
 class CatalogRequest(BaseModel):
-    """Catalog tool request contract."""
+    """CatalogRequest 是 preset 基类执行框架 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     version: ToolVersion
 
 
 def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSecret:
-    """Collect catalog-safe effective values for one tool."""
+    """执行 _non_secret_values，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     settings = get_settings()
     return ToolEnvValuesNonSecret(
@@ -51,7 +61,12 @@ def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSec
 
 
 def _supported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
-    """Expose per-tool size presets in the catalog for MCP clients and agents."""
+    """执行 _supported_size_presets，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     size_presets: tuple[SupportedImageSize, ...]
     if runtime_config.tool_name == "gpt-image-2-url":
@@ -147,7 +162,12 @@ def _guidance_for_compatibility_tool(runtime_config: ToolRuntimeConfig) -> dict[
 
 
 def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
-    """Build one catalog entry from runtime config."""
+    """执行 _entry_for，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     is_formal_tool = runtime_config.tool_name in {"gpt_image_2_official", "nano_banana_2_official"}
     parameter_guidance = _guidance_for_formal_tool(runtime_config) if is_formal_tool else _guidance_for_compatibility_tool(runtime_config)
@@ -194,7 +214,12 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
 
 
 def list_image_tools_catalog(version: ToolVersion) -> ToolCatalogResponse:
-    """Return the exposed image tool catalog for the current runtime."""
+    """执行 list_image_tools_catalog，用于 preset 基类执行框架 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：汇总可用工具信息并对外返回
+        - 步骤 2：遍历配置后生成统一目录结构
+    """
 
     request = CatalogRequest(version=version)
     if request.version is not ToolVersion.V1:

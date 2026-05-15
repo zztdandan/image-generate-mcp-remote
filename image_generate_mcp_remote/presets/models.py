@@ -1,4 +1,4 @@
-"""Preset runtime models and merge helpers."""
+"""models 模块用于preset 契约定义，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,12 @@ from ..models.common import InputImage, ResolvedInputImage
 
 
 class PresetConfigOverrides(BaseModel):
-    """Optional override values supplied by concrete preset classes."""
+    """PresetConfigOverrides 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     base_url: str | None = None
     model: str | None = None
@@ -29,7 +34,12 @@ class PresetConfigOverrides(BaseModel):
 
 
 class ResolvedImageToolPreset(BaseModel):
-    """Effective preset configuration after all class defaults are merged."""
+    """ResolvedImageToolPreset 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     config: ImageToolPresetConfig
     preset_class: str
@@ -58,7 +68,12 @@ class ResolvedImageToolPreset(BaseModel):
 
 
 class GptImage2GenerateExecutionRequest(GenerateImageRequestBase):
-    """Validated GPT Image 2 generate request passed into the active preset."""
+    """GptImage2GenerateExecutionRequest 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     quality: ImageQuality = ImageQuality.AUTO
     output_format: ImageOutputFormat = ImageOutputFormat.PNG
@@ -69,7 +84,12 @@ class GptImage2GenerateExecutionRequest(GenerateImageRequestBase):
 
 
 class GptImage2EditExecutionRequest(EditImageRequestBase):
-    """Validated GPT Image 2 edit request passed into the active preset."""
+    """GptImage2EditExecutionRequest 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     images: list[InputImage]
     mask: InputImage | None = None
@@ -83,7 +103,12 @@ GptImage2ExecutionRequest = GptImage2GenerateExecutionRequest | GptImage2EditExe
 
 
 class NanoBananaGenerateExecutionRequest(GenerateImageRequestBase):
-    """Validated Nano Banana generate request passed into the active preset."""
+    """NanoBananaGenerateExecutionRequest 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     response_modalities: list[ImageResponseModality] = Field(default_factory=lambda: [ImageResponseModality.IMAGE])
     aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE
@@ -94,7 +119,12 @@ class NanoBananaGenerateExecutionRequest(GenerateImageRequestBase):
 
 
 class NanoBananaEditExecutionRequest(EditImageRequestBase):
-    """Validated Nano Banana edit request passed into the active preset."""
+    """NanoBananaEditExecutionRequest 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     input_images: list[InputImage]
     response_modalities: list[ImageResponseModality] = Field(default_factory=lambda: [ImageResponseModality.IMAGE])
@@ -108,7 +138,12 @@ NanoBananaExecutionRequest = NanoBananaGenerateExecutionRequest | NanoBananaEdit
 
 
 class LegacyGptImage2ExecutionRequest(BaseModel):
-    """Deprecated compatibility alias kept out of tool wrappers."""
+    """LegacyGptImage2ExecutionRequest 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     version: str
     mode: PresetModeSupport
@@ -121,14 +156,24 @@ class LegacyGptImage2ExecutionRequest(BaseModel):
 
 
 class GptImage2PreparedRequest(BaseModel):
-    """OpenAI Images payload prepared by the active preset."""
+    """GptImage2PreparedRequest 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     payload: dict[str, str | int]
     files: list[tuple[str, tuple[str, bytes, str]]] = Field(default_factory=list)
 
 
 class NanoBananaPreparedRequest(BaseModel):
-    """Gemini generateContent payload prepared by the active preset."""
+    """NanoBananaPreparedRequest 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     payload: dict[str, object]
     inline_images: list[ResolvedInputImage] = Field(default_factory=list)

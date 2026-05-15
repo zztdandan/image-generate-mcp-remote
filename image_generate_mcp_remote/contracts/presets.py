@@ -1,4 +1,4 @@
-"""Structured contracts for startup-selected image tool presets."""
+"""presets 模块用于preset 契约定义，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -10,14 +10,24 @@ from .image_size import ImageAspectRatio, ImageSizeTier
 
 
 class PresetToolName(StrEnum):
-    """Formal tools that can bind to a startup preset."""
+    """PresetToolName 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     GPT_IMAGE_2_OFFICIAL = "gpt_image_2_official"
     NANO_BANANA_2_OFFICIAL = "nano_banana_2_official"
 
 
 class PresetProvider(StrEnum):
-    """Known upstream provider identities for preset catalog guidance."""
+    """PresetProvider 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     OPENAI = "openai"
     GOOGLE = "google"
@@ -29,14 +39,24 @@ class PresetProvider(StrEnum):
 
 
 class PresetProtocol(StrEnum):
-    """Upstream request protocol families used by image presets."""
+    """PresetProtocol 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     OPENAI_IMAGES = "openai_images"
     GEMINI_GENERATE_CONTENT = "gemini_generate_content"
 
 
 class PresetRequestField(StrEnum):
-    """Provider-owned fields whose upstream dispatch varies by preset."""
+    """PresetRequestField 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     SIZE = "size"
     QUALITY = "quality"
@@ -46,14 +66,24 @@ class PresetRequestField(StrEnum):
 
 
 class PresetModeSupport(StrEnum):
-    """Modes a preset allows for its bound tool."""
+    """PresetModeSupport 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     GENERATE = "generate"
     EDIT = "edit"
 
 
 class PresetFieldDispatchMode(StrEnum):
-    """How a stable MCP parameter is handled for the upstream request."""
+    """PresetFieldDispatchMode 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     SEND = "send"
     PROMPT_FALLBACK = "prompt_fallback"
@@ -61,14 +91,24 @@ class PresetFieldDispatchMode(StrEnum):
 
 
 class PresetStability(StrEnum):
-    """Whether a preset is production-ready or documented as experimental."""
+    """PresetStability 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     STABLE = "stable"
     EXPERIMENTAL = "experimental"
 
 
 class ToolKind(StrEnum):
-    """Catalog-visible tool implementation kind."""
+    """ToolKind 是 preset 契约定义 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     PRESET = "preset"
     TEMPORARY = "temporary"
@@ -76,14 +116,24 @@ class ToolKind(StrEnum):
 
 
 class PresetRuntimeConfig(BaseModel):
-    """Runtime limits owned by a preset for one service process."""
+    """PresetRuntimeConfig 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     timeout_seconds: float
     retry_count: int
 
 
 class PresetDispatchPolicy(BaseModel):
-    """Upstream dispatch policy for provider-owned request fields."""
+    """PresetDispatchPolicy 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     size: PresetFieldDispatchMode
     quality: PresetFieldDispatchMode
@@ -93,14 +143,24 @@ class PresetDispatchPolicy(BaseModel):
 
 
 class UnsupportedSizePreset(BaseModel):
-    """One shared image-size pair disabled by a concrete preset."""
+    """UnsupportedSizePreset 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     image_size: ImageSizeTier
     aspect_ratio: ImageAspectRatio
 
 
 class ImageToolPresetConfig(BaseModel):
-    """Effective class-declared config for one image tool preset."""
+    """ImageToolPresetConfig 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     preset_id: str
     tool_name: PresetToolName
@@ -117,7 +177,12 @@ class ImageToolPresetConfig(BaseModel):
 
 
 class ParameterGuidance(BaseModel):
-    """Catalog guidance for one callable parameter under the active preset."""
+    """ParameterGuidance 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     accepted_by_mcp: bool
     allowed_by_preset: bool
@@ -129,7 +194,12 @@ class ParameterGuidance(BaseModel):
 
 
 class SizePresetCatalogItem(BaseModel):
-    """Catalog-friendly representation of one shared size pair."""
+    """SizePresetCatalogItem 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     image_size: ImageSizeTier
     aspect_ratio: ImageAspectRatio
@@ -138,7 +208,12 @@ class SizePresetCatalogItem(BaseModel):
 
 
 class PresetExecutionContext(BaseModel):
-    """Normalized arguments passed from a formal tool into its preset."""
+    """PresetExecutionContext 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     prompt: str
     mode: PresetModeSupport
@@ -151,7 +226,12 @@ class PresetExecutionContext(BaseModel):
 
 
 class PresetExecutionResult(BaseModel):
-    """Provider response normalized by preset execution."""
+    """PresetExecutionResult 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     image_urls: list[str]
     image_base64_items: list[str]

@@ -1,4 +1,4 @@
-"""Base preset classes with default merging and request validation."""
+"""base 模块用于preset 契约定义，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -45,7 +45,12 @@ RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
 
 
 class BaseImageToolPreset:
-    """Common defaults and validation shared by all formal image presets."""
+    """BaseImageToolPreset 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     preset_id: str = "base_image_tool"
     tool_name: PresetToolName = PresetToolName.GPT_IMAGE_2_OFFICIAL
@@ -70,7 +75,12 @@ class BaseImageToolPreset:
     )
 
     def default_config(self) -> ImageToolPresetConfig:
-        """Return the effective config declared by this preset class."""
+        """执行 default_config，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         return ImageToolPresetConfig(
             preset_id=self.preset_id,
@@ -88,7 +98,12 @@ class BaseImageToolPreset:
         )
 
     def resolve(self) -> ResolvedImageToolPreset:
-        """Resolve class defaults into a runtime object consumed by tools and catalog."""
+        """执行 resolve，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：解析并确定最终生效配置
+            - 步骤 2：合并输入来源后输出可执行结果
+        """
 
         config = self.default_config()
         self._validate_config(config)
@@ -100,7 +115,12 @@ class BaseImageToolPreset:
         image_size: ImageSizeTier,
         aspect_ratio: ImageAspectRatio,
     ) -> None:
-        """Reject requests unsupported by the active preset before calling upstream."""
+        """执行 validate_tool_request，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：校验调用参数是否满足约束
+            - 步骤 2：识别非法组合并尽早返回错误
+        """
 
         resolved = self.resolve()
         if mode not in resolved.config.modes:
@@ -127,7 +147,12 @@ class BaseImageToolPreset:
         aspect_ratio: ImageAspectRatio,
         quality: str | None,
     ) -> str:
-        """Move fields into prompt text only when the preset policy requires it."""
+        """执行 prompt_with_dispatch_fallback，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         requirements: list[str] = []
         resolved = self.resolve()
@@ -155,7 +180,12 @@ class BaseImageToolPreset:
 
 
 class BaseGptImage2Preset(BaseImageToolPreset):
-    """OpenAI Images compatible preset family for gpt_image_2_official."""
+    """BaseGptImage2Preset 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     preset_id = "openai_gpt_image_2"
     tool_name = PresetToolName.GPT_IMAGE_2_OFFICIAL
@@ -166,7 +196,12 @@ class BaseGptImage2Preset(BaseImageToolPreset):
     modes = (PresetModeSupport.GENERATE, PresetModeSupport.EDIT)
 
     def execute_gpt_image_2(self, request: GptImage2ExecutionRequest, api_key: str) -> ImageToolResult:
-        """Execute a GPT Image 2 request using this preset's OpenAI Images behavior."""
+        """执行 execute_gpt_image_2，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         if not api_key:
             raise ConfigError(self.tool_name.value, request.mode.value, "missing API key")
@@ -179,7 +214,12 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         return self.parse_gpt_image_2_response(request, raw_response, elapsed_seconds)
 
     def prepare_gpt_image_2_request(self, request: GptImage2ExecutionRequest) -> GptImage2PreparedRequest:
-        """Build JSON or multipart payload according to this preset's dispatch policy."""
+        """执行 prepare_gpt_image_2_request，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         resolved = self.resolve()
         mode = PresetModeSupport(request.mode.value)
@@ -211,7 +251,12 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         return GptImage2PreparedRequest(payload=payload, files=files)
 
     def send_gpt_image_2_request(self, request: GptImage2ExecutionRequest, prepared: GptImage2PreparedRequest, api_key: str) -> dict[str, object]:
-        """Send one or more OpenAI Images compatible attempts."""
+        """执行 send_gpt_image_2_request，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：发送上游请求并收集响应内容
+            - 步骤 2：按重试策略完成请求闭环
+        """
 
         headers = {"Authorization": f"Bearer {api_key}"}
         mode = PresetModeSupport(request.mode.value)
@@ -235,7 +280,12 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         raise ResponseParseError(self.tool_name.value, request.mode.value, "provider request did not return a response")
 
     def parse_gpt_image_2_response(self, request: GptImage2ExecutionRequest, response_json: dict[str, object], elapsed_seconds: float) -> ImageToolResult:
-        """Accept b64_json, url, or mixed OpenAI-compatible data entries."""
+        """执行 parse_gpt_image_2_response，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：解析输入并转换为内部可用结构
+            - 步骤 2：校验格式后输出标准化结果
+        """
 
         data_items = response_json.get("data")
         if not isinstance(data_items, list) or not data_items:
@@ -340,7 +390,12 @@ class BaseGptImage2Preset(BaseImageToolPreset):
 
 
 class BaseNanoBananaPreset(BaseImageToolPreset):
-    """Gemini generateContent compatible preset family for nano_banana_2_official."""
+    """BaseNanoBananaPreset 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     preset_id = "google_nano_banana"
     tool_name = PresetToolName.NANO_BANANA_2_OFFICIAL
@@ -362,7 +417,12 @@ class BaseNanoBananaPreset(BaseImageToolPreset):
         return ImageSizeProvider.NANO_BANANA
 
     def execute_nano_banana(self, request: NanoBananaExecutionRequest, api_key: str) -> ImageToolResult:
-        """Execute a Nano Banana request using this preset's Gemini behavior."""
+        """执行 execute_nano_banana，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         if not api_key:
             raise ConfigError(self.tool_name.value, request.mode.value, "missing API key")

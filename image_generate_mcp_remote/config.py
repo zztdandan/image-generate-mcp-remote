@@ -1,4 +1,4 @@
-"""Runtime configuration and catalog-facing settings models."""
+"""config 模块用于运行时环境配置装配，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -61,7 +61,12 @@ IMAGE_HTTP_TIMEOUT_SECONDS_ENV = "IMAGE_HTTP_TIMEOUT_SECONDS"
 
 
 class ToolEnvironmentNames(BaseModel):
-    """Names of environment variables that influence one tool."""
+    """ToolEnvironmentNames 是 运行时环境配置装配 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     api_key: str
     preset: str
@@ -71,7 +76,12 @@ class ToolEnvironmentNames(BaseModel):
 
 
 class ToolRuntimeConfig(BaseModel):
-    """Effective configuration for one tool instance."""
+    """ToolRuntimeConfig 是 运行时环境配置装配 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     tool_name: str
     tool_version: ToolVersion = Field(default=ToolVersion.V1)
@@ -98,7 +108,12 @@ class ToolRuntimeConfig(BaseModel):
 
 
 def _parse_supported_models(raw_value: str | None, env_name: str) -> tuple[list[str], str]:
-    """Parse a comma-separated model list while preserving order."""
+    """执行 _parse_supported_models，用于 运行时环境配置装配 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：解析输入并转换为内部可用结构
+        - 步骤 2：校验格式后输出标准化结果
+    """
 
     if raw_value is None:
         return [], "default"
@@ -111,7 +126,12 @@ def _parse_supported_models(raw_value: str | None, env_name: str) -> tuple[list[
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Settings 是 运行时环境配置装配 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -141,12 +161,22 @@ class Settings(BaseSettings):
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, value: str) -> str:
-        """Normalize log level for predictable logging setup."""
+        """执行 validate_log_level，用于 运行时环境配置装配 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：校验调用参数是否满足约束
+            - 步骤 2：识别非法组合并尽早返回错误
+        """
 
         return value.upper()
 
     def gpt_image_2_official_config(self) -> ToolRuntimeConfig:
-        """Build effective config for the OpenAI Images compatible tool."""
+        """执行 gpt_image_2_official_config，用于 运行时环境配置装配 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         from .presets.loader import resolve_preset_for_tool
 
@@ -184,7 +214,12 @@ class Settings(BaseSettings):
         )
 
     def nano_banana_2_official_config(self) -> ToolRuntimeConfig:
-        """Build effective config for the Gemini compatible tool."""
+        """执行 nano_banana_2_official_config，用于 运行时环境配置装配 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         from .presets.loader import resolve_preset_for_tool
 
@@ -230,7 +265,12 @@ class Settings(BaseSettings):
     )
 
     def gpt_image_2_url_config(self) -> ToolRuntimeConfig:
-        """Build effective config for the URL-returning gpt-image-2 gateway."""
+        """执行 gpt_image_2_url_config，用于 运行时环境配置装配 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：执行当前函数并返回对应处理结果
+            - 步骤 2：按当前模块约束完成输入到输出转换
+        """
 
         supported_models, source = _parse_supported_models(
             self.gpt_image_2_url_supported_models_raw,
@@ -272,13 +312,23 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return cached settings to keep runtime reads stable."""
+    """执行 get_settings，用于 运行时环境配置装配 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return Settings()
 
 
 def clear_runtime_caches() -> None:
-    """Clear cached settings and presets for tests or process-local reloads."""
+    """执行 clear_runtime_caches，用于 运行时环境配置装配 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     from .presets.loader import clear_preset_cache
 

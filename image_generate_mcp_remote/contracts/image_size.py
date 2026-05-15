@@ -1,4 +1,4 @@
-"""Shared image size contracts and provider-aware registry helpers."""
+"""image_size 模块用于尺寸档位与比例映射，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,12 @@ SUPPORTED_SIZE_ITEM_DELIMITER = ", "
 
 
 class ImageSizeTier(StrEnum):
-    """Named resolution tiers supported across providers."""
+    """ImageSizeTier 是 尺寸档位与比例映射 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     SIZE_1K = "1K"
     SIZE_2K = "2K"
@@ -19,7 +24,12 @@ class ImageSizeTier(StrEnum):
 
 
 class ImageAspectRatio(StrEnum):
-    """Aspect ratio keys shared across provider adapters."""
+    """ImageAspectRatio 是 尺寸档位与比例映射 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     SQUARE = "1:1"
     PORTRAIT_2_3 = "2:3"
@@ -34,7 +44,12 @@ class ImageAspectRatio(StrEnum):
 
 
 class ImageSizeProvider(StrEnum):
-    """Provider-specific size matrix selectors."""
+    """ImageSizeProvider 是 尺寸档位与比例映射 的枚举集合，作用范围为本模块对外与对内的有限取值。
+    
+    职责：
+        - 统一该领域字段的允许值并约束调用方输入
+        - 为请求组装与响应解析提供稳定语义锚点
+    """
 
     GPT = "gpt"
     NANO_BANANA = "nano_banana"
@@ -42,7 +57,12 @@ class ImageSizeProvider(StrEnum):
 
 @dataclass(frozen=True)
 class ProviderImageSize:
-    """One concrete pixel size used by a specific provider."""
+    """ProviderImageSize 是 尺寸档位与比例映射 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     width: int
     height: int
@@ -54,7 +74,12 @@ class ProviderImageSize:
 
 @dataclass(frozen=True)
 class ImageSizeKey:
-    """Registry key for one tier plus aspect-ratio combination."""
+    """ImageSizeKey 是 尺寸档位与比例映射 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     tier: ImageSizeTier
     aspect_ratio: ImageAspectRatio
@@ -62,7 +87,12 @@ class ImageSizeKey:
 
 @dataclass(frozen=True)
 class SupportedImageSize:
-    """Shared size preset with provider-specific concrete pixel sizes."""
+    """SupportedImageSize 是 尺寸档位与比例映射 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     key: ImageSizeKey
     gpt_size: ProviderImageSize
@@ -95,7 +125,12 @@ class SupportedImageSize:
 
 
 class SupportedImageSizes:
-    """Provider-aware registry for all supported size combinations."""
+    """SupportedImageSizes 是 尺寸档位与比例映射 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
 
     _BY_KEY: dict[ImageSizeKey, SupportedImageSize] = {
         ImageSizeKey(ImageSizeTier.SIZE_1K, ImageAspectRatio.SQUARE): SupportedImageSize(
@@ -290,7 +325,12 @@ SUPPORTED_IMAGE_SIZES = SupportedImageSizes
 
 
 def supported_image_sizes_for_tier(tier: ImageSizeTier) -> tuple[SupportedImageSize, ...]:
-    """Return the canonical presets for one named resolution tier."""
+    """执行 supported_image_sizes_for_tier，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return SupportedImageSizes.for_tier(tier)
 
@@ -299,7 +339,12 @@ def supported_size_values(
     sizes: tuple[SupportedImageSize, ...],
     provider: ImageSizeProvider = ImageSizeProvider.GPT,
 ) -> tuple[str, ...]:
-    """Return sorted `<width>x<height>` values for human-readable validation messages."""
+    """执行 supported_size_values，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return tuple(sorted(preset.size_for_provider(provider).value for preset in sizes))
 
@@ -309,7 +354,12 @@ def format_supported_image_sizes(
     provider: ImageSizeProvider = ImageSizeProvider.GPT,
     include_nano_banana_companion: bool = False,
 ) -> str:
-    """Format presets with their tier and aspect ratio so callers can pick the right value."""
+    """执行 format_supported_image_sizes，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     formatted_items: list[str] = []
     for preset in sorted(sizes, key=lambda item: _sort_key(item, provider)):
@@ -331,7 +381,12 @@ def supported_image_size_error_message(
     provider: ImageSizeProvider = ImageSizeProvider.GPT,
     include_nano_banana_companion: bool = False,
 ) -> str:
-    """Build a size validation error that always includes discoverable supported presets."""
+    """执行 supported_image_size_error_message，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     effective_sizes: tuple[SupportedImageSize, ...] = sizes or SupportedImageSizes.all()
     return (
@@ -346,7 +401,12 @@ def _sort_key(preset: SupportedImageSize, provider: ImageSizeProvider) -> tuple[
 
 
 def parse_requested_size(size: str) -> tuple[int, int]:
-    """Parse a `<width>x<height>` size string into positive integers."""
+    """执行 parse_requested_size，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：解析输入并转换为内部可用结构
+        - 步骤 2：校验格式后输出标准化结果
+    """
 
     parts: list[str] = size.split(SIZE_DELIMITER)
     if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
@@ -364,19 +424,34 @@ def provider_size_value(
     aspect_ratio: ImageAspectRatio,
     provider: ImageSizeProvider = ImageSizeProvider.GPT,
 ) -> str:
-    """Return the concrete `<width>x<height>` size string for one provider."""
+    """执行 provider_size_value，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return SupportedImageSizes.resolve(image_size, aspect_ratio).size_for_provider(provider).value
 
 
 def resolve_supported_size_selection(image_size: ImageSizeTier, aspect_ratio: ImageAspectRatio) -> SupportedImageSize:
-    """Resolve one enum pair into the shared supported size record."""
+    """执行 resolve_supported_size_selection，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：解析并确定最终生效配置
+        - 步骤 2：合并输入来源后输出可执行结果
+    """
 
     return SupportedImageSizes.resolve(image_size, aspect_ratio)
 
 
 def resolve_supported_size(size: str, provider: ImageSizeProvider = ImageSizeProvider.GPT) -> SupportedImageSize:
-    """Resolve any explicit size into its canonical supported preset."""
+    """执行 resolve_supported_size，用于 尺寸档位与比例映射 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：解析并确定最终生效配置
+        - 步骤 2：合并输入来源后输出可执行结果
+    """
 
     preset = SupportedImageSizes.from_provider_size_value(size)
     if preset is not None:

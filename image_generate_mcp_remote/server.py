@@ -1,4 +1,4 @@
-"""Main MCP server implementation for image-only tools."""
+"""server 模块用于MCP 工具入口编排，作用范围为 `image_generate_mcp_remote` 服务运行时。"""
 
 from __future__ import annotations
 
@@ -38,7 +38,12 @@ mcp = FastMCP(name="Image Generate MCP Remote")
 
 
 def configure_logging(level: str) -> None:
-    """Configure root logging for CLI startup."""
+    """执行 configure_logging，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
@@ -48,7 +53,12 @@ def configure_logging(level: str) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse CLI arguments for supported MCP transports."""
+    """执行 parse_args，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：解析输入并转换为内部可用结构
+        - 步骤 2：校验格式后输出标准化结果
+    """
 
     parser = argparse.ArgumentParser(description="Remote MCP server for image generation")
     parser.add_argument(
@@ -63,7 +73,12 @@ def parse_args() -> argparse.Namespace:
 
 @mcp.tool(title="Image Tools Catalog", description="List image tool defaults and effective config")
 def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
-    """Expose image tool catalog as an MCP tool."""
+    """执行 list_image_tools_catalog_tool，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：汇总可用工具信息并对外返回
+        - 步骤 2：遍历配置后生成统一目录结构
+    """
 
     return list_image_tools_catalog(version).model_dump(mode="json")
 
@@ -93,7 +108,12 @@ def gpt_image_2_official(
     images: list[InputImage] | None = None,
     mask: InputImage | None = None,
 ) -> dict[str, object]:
-    """Expose generate/edit behavior behind one product-level tool."""
+    """执行 gpt_image_2_official，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     if mode is ImageToolMode.GENERATE:
         return gpt_image_2_official_generate(
@@ -147,7 +167,12 @@ def nano_banana_2_official(
     include_thoughts: bool = False,
     input_images: list[InputImage] | None = None,
 ) -> dict[str, object]:
-    """Expose generate/edit behavior behind one product-level tool."""
+    """执行 nano_banana_2_official，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     if mode is ImageToolMode.GENERATE:
         return nano_banana_2_official_generate(
@@ -201,7 +226,12 @@ def gpt_image_2_temporary(
     send_moderation: bool = False,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
 ) -> dict[str, object]:
-    """Expose temporary OpenAI Images-compatible exploration without preset registry."""
+    """执行 gpt_image_2_temporary，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return gpt_image_2_temporary_generate(
         version=version,
@@ -243,7 +273,12 @@ def nano_banana_2_temporary(
     response_modalities: list[ResponseModality] | None = None,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
 ) -> dict[str, object]:
-    """Expose temporary Gemini-compatible exploration without preset registry."""
+    """执行 nano_banana_2_temporary，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return nano_banana_2_temporary_generate(
         version=version,
@@ -283,7 +318,12 @@ def gpt_image_2_url(
     retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
 
 ) -> dict[str, object]:
-    """Expose the URL-returning image gateway as an MCP tool."""
+    """执行 gpt_image_2_url，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     return gpt_image_2_url_generate(
         version=version,
@@ -299,7 +339,12 @@ def gpt_image_2_url(
 
 
 def main() -> None:
-    """Start the MCP server using the selected transport."""
+    """执行 main，用于 MCP 工具入口编排 场景下的当前步骤处理。
+    
+    处理流程：
+        - 步骤 1：执行当前函数并返回对应处理结果
+        - 步骤 2：按当前模块约束完成输入到输出转换
+    """
 
     args = parse_args()
     settings = get_settings()
