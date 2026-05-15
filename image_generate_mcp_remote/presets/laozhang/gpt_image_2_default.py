@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider
+from ...contracts.image_size import ImageAspectRatio, ImageSizeTier
+from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, UnsupportedSizePreset
 
 
 class LaoZhangGptImage2DefaultPreset(BaseGptImage2Preset):
@@ -24,7 +25,13 @@ class LaoZhangGptImage2DefaultPreset(BaseGptImage2Preset):
         background=PresetFieldDispatchMode.SEND,
         moderation=PresetFieldDispatchMode.SEND,
     )
+    unsupported_sizes: tuple[UnsupportedSizePreset, ...] = tuple(
+        UnsupportedSizePreset(image_size=image_size, aspect_ratio=aspect_ratio)
+        for image_size in (ImageSizeTier.SIZE_2K, ImageSizeTier.SIZE_4K)
+        for aspect_ratio in ImageAspectRatio
+    )
     notes = (
         "LaoZhang default token group is a reverse ChatGPT route.",
         "Provider docs say size and quality are unsupported for this group, so the preset drops them.",
+        "2K and 4K requests are blocked because upstream testing shows this preset cannot generate those sizes.",
     )

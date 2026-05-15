@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetProvider
+from ...contracts.image_size import ImageAspectRatio, ImageSizeTier
+from ...contracts.presets import PresetProvider, UnsupportedSizePreset
 
 
 class RightCodesGptImage2Preset(BaseGptImage2Preset):
@@ -17,7 +18,13 @@ class RightCodesGptImage2Preset(BaseGptImage2Preset):
     preset_id = "right_codes_gpt_image_2"
     provider = PresetProvider.RIGHT_CODES
     base_url = "https://www.right.codes/draw/v1"
+    unsupported_sizes: tuple[UnsupportedSizePreset, ...] = tuple(
+        UnsupportedSizePreset(image_size=image_size, aspect_ratio=aspect_ratio)
+        for image_size in (ImageSizeTier.SIZE_2K, ImageSizeTier.SIZE_4K)
+        for aspect_ratio in ImageAspectRatio
+    )
     notes = (
         "Right Codes Images API returns data[0].url in verified generation and edit flows.",
         "response_format=b64_json may still return URL, so parsing must accept both b64_json and url.",
+        "2K and 4K requests are blocked because upstream testing shows this preset cannot generate those sizes.",
     )

@@ -125,7 +125,7 @@ def test_gpt_generate_uses_active_laozhang_preset_dispatch(monkeypatch, tmp_path
         prompt="draw a mug",
         save_path=str(tmp_path / "override.png"),
         aspect_ratio=ImageAspectRatio.WIDE_16_9,
-        image_size=ImageSizeTier.SIZE_2K,
+        image_size=ImageSizeTier.SIZE_1K,
         quality=GptImageQuality.HIGH,
     )
 
@@ -135,7 +135,7 @@ def test_gpt_generate_uses_active_laozhang_preset_dispatch(monkeypatch, tmp_path
         "prompt": (
             "draw a mug\n\n"
             "Provider parameter fallback requirements:\n"
-            "- Target image size: 2048x1152.\n"
+            "- Target image size: 1280x720.\n"
             "- Target image quality: high."
         ),
         "model": "gpt-image-2",
@@ -167,7 +167,7 @@ def test_gpt_generate_supports_per_call_preset_and_api_key_override(monkeypatch,
         prompt="draw a lantern",
         save_path=str(tmp_path / "override-per-call.png"),
         aspect_ratio=ImageAspectRatio.WIDE_16_9,
-        image_size=ImageSizeTier.SIZE_2K,
+        image_size=ImageSizeTier.SIZE_1K,
         quality=GptImageQuality.HIGH,
         preset="laozhang_gpt_image_2_default",
         api_key="request-secret-key",
@@ -176,7 +176,7 @@ def test_gpt_generate_supports_per_call_preset_and_api_key_override(monkeypatch,
     assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
     assert captured["timeout"] == 180
-    assert "Target image size: 2048x1152." in captured["json"]["prompt"]
+    assert "Target image size: 1280x720." in captured["json"]["prompt"]
     assert result.file_path.endswith("override-per-call.png")
 
 
@@ -199,7 +199,7 @@ def test_gpt_generate_downloads_url_response(monkeypatch, tmp_path: Path):
 
     def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
         captured["post_url"] = url
-        return DummyResponse({"created": 321, "data": [{"url": "https://cdn.example.com/generated.png"}]})
+        return DummyResponse({"created": 321, "data": [{"url": "http://cdn.example.com/generated.png"}]})
 
     def fake_get(url: str, timeout: float, follow_redirects: bool):
         captured["download_url"] = url
@@ -237,14 +237,107 @@ def test_gpt_generate_downloads_url_response(monkeypatch, tmp_path: Path):
     )
 
     assert captured["post_url"] == "https://api.openai.com/v1/images/generations"
-    assert captured["download_url"] == "https://cdn.example.com/generated.png"
+    assert captured["download_url"] == "http://cdn.example.com/generated.png"
     assert captured["download_timeout"] == 180
     assert captured["follow_redirects"] is True
     assert result.file_path.endswith("from-url.png")
     assert result.provider_response_excerpt == {
         "created": "321",
-        "source_url": "https://cdn.example.com/generated.png",
+        "source_url": "http://cdn.example.com/generated.png",
     }
+
+
+def test_gpt_generate_vip_preset_sends_minimal_payload(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "env-secret-key")
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse({"created": 778, "data": [{"b64_json": image_payload}]})
+
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
+
+    result = gpt_image_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="draw a lantern",
+        save_path=str(tmp_path / "vip-minimal.png"),
+        aspect_ratio=ImageAspectRatio.WIDE_16_9,
+        image_size=ImageSizeTier.SIZE_1K,
+        quality=GptImageQuality.HIGH,
+        preset="laozhang_gpt_image_2_vip",
+        api_key="request-secret-key",
+    )
+
+    assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
+    assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
+    assert captured["timeout"] == 240
+    assert captured["json"] == {
+        "prompt": "draw a lantern",
+        "model": "gpt-image-2-vip",
+        "size": "1280x720",
+    }
+    assert result.file_path.endswith("vip-minimal.png")
+
+
+def test_gpt_generate_vip_preset_rejects_4k_requests(tmp_path: Path):
+    with pytest.raises(ValidationError, match="image_size plus aspect_ratio is not supported by the active preset"):
+        gpt_image_2_official_generate(
+            version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            prompt="draw a lantern",
+            save_path=str(tmp_path / "vip-4k.png"),
+            aspect_ratio=ImageAspectRatio.WIDE_16_9,
+            image_size=ImageSizeTier.SIZE_4K,
+            preset="laozhang_gpt_image_2_vip",
+            api_key="request-secret-key",
+        )
+
+
+def test_gpt_generate_default_preset_rejects_2k_requests(tmp_path: Path):
+    with pytest.raises(ValidationError, match="image_size plus aspect_ratio is not supported by the active preset"):
+        gpt_image_2_official_generate(
+            version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            prompt="draw a mug",
+            save_path=str(tmp_path / "default-2k.png"),
+            aspect_ratio=ImageAspectRatio.WIDE_16_9,
+            image_size=ImageSizeTier.SIZE_2K,
+            preset="laozhang_gpt_image_2_default",
+            api_key="request-secret-key",
+        )
+
+
+def test_gpt_generate_right_codes_preset_rejects_2k_requests(tmp_path: Path):
+    with pytest.raises(ValidationError, match="image_size plus aspect_ratio is not supported by the active preset"):
+        gpt_image_2_official_generate(
+            version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            prompt="draw a skyline",
+            save_path=str(tmp_path / "right-codes-2k.png"),
+            aspect_ratio=ImageAspectRatio.WIDE_16_9,
+            image_size=ImageSizeTier.SIZE_2K,
+            preset="right_codes_gpt_image_2",
+            api_key="request-secret-key",
+        )
+
+
+def test_gpt_generate_right_codes_preset_rejects_4k_requests(tmp_path: Path):
+    with pytest.raises(ValidationError, match="image_size plus aspect_ratio is not supported by the active preset"):
+        gpt_image_2_official_generate(
+            version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            prompt="draw a skyline",
+            save_path=str(tmp_path / "right-codes-4k.png"),
+            aspect_ratio=ImageAspectRatio.WIDE_16_9,
+            image_size=ImageSizeTier.SIZE_4K,
+            preset="right_codes_gpt_image_2",
+            api_key="request-secret-key",
+        )
 
 
 def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path):

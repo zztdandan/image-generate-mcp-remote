@@ -20,7 +20,7 @@ class CopperAIGptImage2Preset(BaseGptImage2Preset):
     stability = PresetStability.EXPERIMENTAL
     dispatch = PresetDispatchPolicy(
         size=PresetFieldDispatchMode.PROMPT_FALLBACK,
-        quality=PresetFieldDispatchMode.DROP,
+        quality=PresetFieldDispatchMode.PROMPT_FALLBACK,
         output_format=PresetFieldDispatchMode.DROP,
         background=PresetFieldDispatchMode.DROP,
         moderation=PresetFieldDispatchMode.DROP,

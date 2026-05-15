@@ -365,7 +365,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
 
             image_bytes = decode_base64_image(self.tool_name.value, request.mode.value, self.normalize_provider_base64(image_base64))
             mime_type = self.mime_type_for_output(request.output_format)
-        elif isinstance(source_url, str) and source_url.startswith("https://"):
+        elif isinstance(source_url, str) and source_url:
             download_response = self.download_image_with_timeout(PresetModeSupport(request.mode.value), source_url)
             image_bytes = download_response.content
             mime_type = self.mime_type_from_download(download_response, request.save_path, source_url)

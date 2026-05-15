@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, PresetRuntimeConfig
+from ...contracts.image_size import ImageAspectRatio, ImageSizeTier
+from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, PresetRuntimeConfig, UnsupportedSizePreset
+from ...presets.models import GptImage2ExecutionRequest, GptImage2PreparedRequest
 
 
 class LaoZhangGptImage2VipPreset(BaseGptImage2Preset):
@@ -26,4 +28,19 @@ class LaoZhangGptImage2VipPreset(BaseGptImage2Preset):
         moderation=PresetFieldDispatchMode.SEND,
     )
     runtime = PresetRuntimeConfig(timeout_seconds=240.0, retry_count=1)
-    notes = ("LaoZhang gpt-image-2-vip supports explicit size but not quality according to archived docs.",)
+    unsupported_sizes: tuple[UnsupportedSizePreset, ...] = tuple(
+        UnsupportedSizePreset(image_size=ImageSizeTier.SIZE_4K, aspect_ratio=aspect_ratio)
+        for aspect_ratio in ImageAspectRatio
+    )
+    notes = (
+        "LaoZhang gpt-image-2-vip supports explicit size but not quality according to archived docs.",
+        "4K requests are blocked because upstream testing shows this preset cannot generate 4K images.",
+    )
+
+    def prepare_gpt_image_2_request(self, request: GptImage2ExecutionRequest) -> GptImage2PreparedRequest:
+        prepared = super().prepare_gpt_image_2_request(request)
+        prepared.payload.pop("output_format", None)
+        prepared.payload.pop("background", None)
+        prepared.payload.pop("moderation", None)
+        prepared.payload.pop("n", None)
+        return prepared
