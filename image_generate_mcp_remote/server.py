@@ -8,7 +8,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from .config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, DEFAULT_TOOL_RETRY_COUNT, SERVICE_NAME, get_settings
+from .config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, SERVICE_NAME, get_settings
 from .contracts.image_size import ImageAspectRatio, ImageSizeTier
 from .models.common import ImageToolMode, InputImage, ToolVersion
 from .tools.catalog import list_image_tools_catalog
@@ -31,8 +31,6 @@ from .tools.nano_banana_2_official import (
     nano_banana_2_official_edit,
     nano_banana_2_official_generate,
 )
-from .tools.gpt_image_2_url import gpt_image_2_url_generate
-
 logger = logging.getLogger(__name__)
 mcp = FastMCP(name="Image Generate MCP Remote")
 
@@ -291,50 +289,6 @@ def nano_banana_2_temporary(
         image_size=image_size,
         response_modalities=response_modalities,
         timeout_seconds=timeout_seconds,
-    ).model_dump(mode="json")
-
-
-@mcp.tool(
-    name="gpt-image-2-url",
-    title="GPT Image 2 URL",
-    description=(
-        "Generate images through the right.codes draw-compatible endpoint. "
-        "This tool asks upstream for response_format=url, then downloads that returned image URL and saves it to save_path; "
-        "callers do not need to download the URL themselves. "
-        "The image parameter is an optional list of reference image URLs, not an output URL. "
-        "Use image_size plus aspect_ratio from the shared catalog enums; only benchmark-verified combinations are accepted. "
-        "Call list_image_tools_catalog first to inspect supported_size_presets and image_http_timeout_seconds."
-    ),
-)
-def gpt_image_2_url(
-    version: ToolVersion,
-    prompt: str,
-    save_path: str,
-    model: str | None = None,
-    image: list[str] | None = None,
-    aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE,
-    image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
-    timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-    retry_count: int = DEFAULT_TOOL_RETRY_COUNT,
-
-) -> dict[str, object]:
-    """执行 gpt_image_2_url，用于 MCP 工具入口编排 场景下的当前步骤处理。
-    
-    处理流程：
-        - 步骤 1：执行当前函数并返回对应处理结果
-        - 步骤 2：按当前模块约束完成输入到输出转换
-    """
-
-    return gpt_image_2_url_generate(
-        version=version,
-        prompt=prompt,
-        save_path=save_path,
-        model=model,
-        image=image,
-        aspect_ratio=aspect_ratio,
-        image_size=image_size,
-        timeout_seconds=timeout_seconds,
-        retry_count=retry_count,
     ).model_dump(mode="json")
 
 

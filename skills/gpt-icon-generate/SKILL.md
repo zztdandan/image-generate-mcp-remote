@@ -1,6 +1,6 @@
 ---
 name: gpt-icon-generate
-description: "当用户有任何图标生成、图标包、规则网格图标板、UI 图标、产品功能图标、应用图标、图标切图、透明 PNG、去白底、生成图片后拆分图标、MCP 图片生成等需求时使用。默认流程是用 `image-generate-mcp-remote_gpt_image_2_official` 生成 2K、1:1、4x4/16 个图标、纯白背景、每个图标带贴合轮廓描边/外发光/柔和阴影的图标板；如果用户指定行列、比例、尺寸或 URL 版工具，则按用户参数生成规则网格，并用校验脚本、参数规划脚本和 connected bbox 切图脚本输出透明 PNG。"
+description: "当用户有任何图标生成、图标包、规则网格图标板、UI 图标、产品功能图标、应用图标、图标切图、透明 PNG、去白底、生成图片后拆分图标、MCP 图片生成等需求时使用。默认流程是用 `image-generate-mcp-remote_gpt_image_2_official` 生成 2K、1:1、4x4/16 个图标、纯白背景、每个图标带贴合轮廓描边/外发光/柔和阴影的图标板；如果用户指定行列、比例、尺寸或临时探索工具，则按用户参数生成规则网格，并用校验脚本、参数规划脚本和 connected bbox 切图脚本输出透明 PNG。"
 license: Proprietary. Internal project skill.
 ---
 
@@ -18,7 +18,7 @@ license: Proprietary. Internal project skill.
 
 - 本项目 MCP 配置文件：`.opencode/opencode.json`
 - 默认图片 MCP 工具：`image-generate-mcp-remote_gpt_image_2_official`
-- URL 版工具：`image-generate-mcp-remote_gpt-image-2-url`
+- 临时探索工具：`image-generate-mcp-remote_gpt_image_2_temporary`
 - 生成前优先调用 `image-generate-mcp-remote_list_image_tools_catalog_tool` 检查当前工具支持的 size preset。
 - 推荐输出路径：当前工作目录下的明确绝对路径，例如 `/home/base/repo/document/app-icons-sheet.png`
 
@@ -42,7 +42,7 @@ license: Proprietary. Internal project skill.
 - `cols`：图标板列数，默认 `4`
 - `size`：生成尺寸，默认 `2048x2048`
 - `aspect_ratio`：图片比例，默认 `1:1`
-- `tool`：图片生成工具，默认 `gpt_image_2_official`，用户可指定 `gpt-image-2-url`
+- `tool`：图片生成工具，默认 `gpt_image_2_official`；陌生兼容站点试跑时才使用 `gpt_image_2_temporary`
 - `fuzz`：背景 floodfill 容差，默认 `1.5%`
 - `pad`：组件 bbox 外扩像素，默认由实际图片尺寸计算
 - `border`：透明图标边缘留白，默认由实际图片尺寸计算
@@ -54,9 +54,10 @@ license: Proprietary. Internal project skill.
 ## 工具选择规则
 
 1. 默认使用 `image-generate-mcp-remote_gpt_image_2_official`。
-2. 如果用户明确要求 URL 版、right.codes draw 兼容链路，或 official 工具不可用，再使用 `image-generate-mcp-remote_gpt-image-2-url`。
-3. 如果目标尺寸不被当前工具支持，选择同宽高比下最接近的可用尺寸，并告知用户。
-4. 如果请求 `2K` 但实际返回 `1K`，不直接失败；必须以实际输出尺寸重新计算切图参数。
+2. 如果用户明确要求 right.codes draw 兼容链路，优先要求服务启动时将 `IMG_GEN_GPT_IMAGE_2_OFFICIAL_PRESET` 配置为 `right_codes_gpt_image_2`，仍使用 `image-generate-mcp-remote_gpt_image_2_official`。
+3. 只有在探索陌生 OpenAI Images 兼容站点、且还没有正式 preset 时，才使用 `image-generate-mcp-remote_gpt_image_2_temporary`。
+4. 如果目标尺寸不被当前工具支持，选择同宽高比下最接近的可用尺寸，并告知用户。
+5. 如果请求 `2K` 但实际返回 `1K`，不直接失败；必须以实际输出尺寸重新计算切图参数。
 
 ## 生成建议
 

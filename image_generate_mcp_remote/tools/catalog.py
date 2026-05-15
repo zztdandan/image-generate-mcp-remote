@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from ..config import (
+    DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
     IMAGE_BASE_URL_ENV,
     IMAGE_HTTP_TIMEOUT_SECONDS_ENV,
     IMAGE_OUTPUT_DIR_ENV,
@@ -17,42 +18,47 @@ from ..config import (
     get_settings,
 )
 from ..contracts.image_size import SUPPORTED_IMAGE_SIZES, SupportedImageSize
-from ..contracts.presets import ParameterGuidance, PresetFieldDispatchMode, PresetStability, PresetToolName, ToolKind
+from ..contracts.presets import ParameterGuidance, PresetFieldDispatchMode, PresetProtocol, PresetProvider, PresetStability, PresetToolName, ToolKind
 from ..errors import ValidationError
 from ..models.common import ToolCatalogEntry, ToolCatalogResponse, ToolEnvValuesNonSecret, ToolVersion
 from ..presets.loader import resolve_preset_for_tool
-from .gpt_image_2_url import GPT_IMAGE_2_URL_ALLOWED_SIZES
 
 CATALOG_TOOL_NAME = "list_image_tools_catalog"
+GPT_IMAGE_2_TEMPORARY_NAME = "gpt_image_2_temporary"
+NANO_BANANA_2_TEMPORARY_NAME = "nano_banana_2_temporary"
 
 
 class CatalogRequest(BaseModel):
-    """CatalogRequest 是 preset 基类执行框架 的结构模型，作用范围为本模块数据边界与调用契约。
-    
-    职责：
-        - 定义该场景下必须字段与可选字段的语义边界
-        - 作为模块间传递对象，保证类型与字段命名一致
-    """
+    """CatalogRequest 是 preset 基类执行框架 的结构模型，作用范围为本模块数据边界与调用契约。"""
 
     version: ToolVersion
 
 
 def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSecret:
-    """执行 _non_secret_values，用于 preset 基类执行框架 场景下的当前步骤处理。
-    
-    处理流程：
-        - 步骤 1：执行当前函数并返回对应处理结果
-        - 步骤 2：按当前模块约束完成输入到输出转换
-    """
-
     settings = get_settings()
     return ToolEnvValuesNonSecret(
         base_url=runtime_config.effective_base_url,
-        base_url_source=runtime_config.base_url_source,
+        base_url_source="preset",
         model=runtime_config.effective_model,
-        model_source=runtime_config.model_source,
-        supported_models=list(runtime_config.supported_models_effective),
-        supported_models_source=runtime_config.supported_models_source,
+        model_source="preset",
+        supported_models=[runtime_config.effective_model],
+        supported_models_source="preset",
+        output_dir=str(Path(settings.image_output_dir)),
+        image_base_url=settings.image_base_url,
+        image_base_url_source="env" if settings.image_base_url else "default",
+        image_http_timeout_seconds=settings.image_http_timeout_seconds,
+    )
+
+
+def _temporary_non_secret_values() -> ToolEnvValuesNonSecret:
+    settings = get_settings()
+    return ToolEnvValuesNonSecret(
+        base_url="",
+        base_url_source="per_call",
+        model="",
+        model_source="per_call",
+        supported_models=[],
+        supported_models_source="per_call",
         output_dir=str(Path(settings.image_output_dir)),
         image_base_url=settings.image_base_url,
         image_base_url_source="env" if settings.image_base_url else "default",
@@ -61,18 +67,7 @@ def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSec
 
 
 def _supported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
-    """执行 _supported_size_presets，用于 preset 基类执行框架 场景下的当前步骤处理。
-    
-    处理流程：
-        - 步骤 1：执行当前函数并返回对应处理结果
-        - 步骤 2：按当前模块约束完成输入到输出转换
-    """
-
-    size_presets: tuple[SupportedImageSize, ...]
-    if runtime_config.tool_name == "gpt-image-2-url":
-        size_presets = GPT_IMAGE_2_URL_ALLOWED_SIZES
-    else:
-        size_presets = SUPPORTED_IMAGE_SIZES.all()
+    size_presets = SUPPORTED_IMAGE_SIZES.all()
     if runtime_config.tool_name == "nano_banana_2_official":
         return [
             f"{preset.tier.value} + {preset.aspect_ratio.value} (gpt={preset.gpt_value}, nano={preset.nano_banana_value})"
@@ -82,8 +77,6 @@ def _supported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
 
 
 def _unsupported_size_presets(runtime_config: ToolRuntimeConfig) -> list[str]:
-    if runtime_config.tool_name not in {"gpt_image_2_official", "nano_banana_2_official"}:
-        return []
     preset_tool_name = PresetToolName(runtime_config.tool_name)
     preset_env = (
         get_settings().gpt_image_2_official_preset
@@ -144,38 +137,76 @@ def _guidance_for_formal_tool(runtime_config: ToolRuntimeConfig) -> dict[str, Pa
     }
 
 
-def _guidance_for_compatibility_tool(runtime_config: ToolRuntimeConfig) -> dict[str, ParameterGuidance]:
-    return {
+def _temporary_guidance(protocol: PresetProtocol) -> dict[str, ParameterGuidance]:
+    size_behavior = PresetFieldDispatchMode.SEND
+    guidance: dict[str, ParameterGuidance] = {
+        "api_key": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            guidance="temporary tools accept api_key per call for unknown-provider exploration",
+        ),
+        "base_url": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            guidance="temporary tools accept base_url per call and do not participate in the preset registry",
+        ),
         "model": ParameterGuidance(
             accepted_by_mcp=True,
             allowed_by_preset=True,
-            locked_value=runtime_config.effective_model,
-            guidance="legacy compatibility wrapper still accepts model and validates it against supported models",
+            guidance="temporary tools accept model per call so successful probes can later become reviewed presets",
         ),
         "image_size": ParameterGuidance(
             accepted_by_mcp=True,
             allowed_by_preset=True,
-            upstream_behavior=PresetFieldDispatchMode.SEND,
-            guidance="only benchmark-verified size pairs listed in supported_size_presets are accepted",
+            allowed_values=sorted({preset_item.tier.value for preset_item in SUPPORTED_IMAGE_SIZES.all()}),
+            must_pair_with="aspect_ratio",
+            upstream_behavior=size_behavior,
+            guidance="temporary tools send the standard size mapping as the conservative compatibility probe",
+        ),
+        "aspect_ratio": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            allowed_values=sorted({preset_item.aspect_ratio.value for preset_item in SUPPORTED_IMAGE_SIZES.all()}),
+            must_pair_with="image_size",
+            upstream_behavior=size_behavior,
+            guidance="temporary tools send the standard aspect ratio mapping with image_size",
         ),
     }
+    if protocol is PresetProtocol.OPENAI_IMAGES:
+        guidance["quality"] = ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            upstream_behavior=PresetFieldDispatchMode.DROP,
+            guidance="quality is accepted but dropped unless send_quality=true is explicitly provided",
+        )
+        guidance["output_format"] = ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            upstream_behavior=PresetFieldDispatchMode.DROP,
+            guidance="output_format is accepted but dropped unless send_output_format=true is explicitly provided",
+        )
+        guidance["background"] = ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            upstream_behavior=PresetFieldDispatchMode.DROP,
+            guidance="background is accepted but dropped unless send_background=true is explicitly provided",
+        )
+        guidance["moderation"] = ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            upstream_behavior=PresetFieldDispatchMode.DROP,
+            guidance="moderation is accepted but dropped unless send_moderation=true is explicitly provided",
+        )
+    return guidance
 
 
 def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
-    """执行 _entry_for，用于 preset 基类执行框架 场景下的当前步骤处理。
-    
-    处理流程：
-        - 步骤 1：执行当前函数并返回对应处理结果
-        - 步骤 2：按当前模块约束完成输入到输出转换
-    """
-
-    is_formal_tool = runtime_config.tool_name in {"gpt_image_2_official", "nano_banana_2_official"}
-    parameter_guidance = _guidance_for_formal_tool(runtime_config) if is_formal_tool else _guidance_for_compatibility_tool(runtime_config)
+    parameter_guidance = _guidance_for_formal_tool(runtime_config)
     return ToolCatalogEntry(
         tool_name=runtime_config.tool_name,
         tool_version=runtime_config.tool_version,
-        title=runtime_config.tool_name.replace("_", " ").replace("-", " ").title(),
-        tool_kind=ToolKind.PRESET if is_formal_tool else ToolKind.COMPATIBILITY,
+        title=runtime_config.tool_name.replace("_", " ").title(),
+        tool_kind=ToolKind.PRESET,
         modes=list(runtime_config.modes),
         active_preset_id=runtime_config.active_preset_id,
         active_preset_class=runtime_config.active_preset_class,
@@ -191,15 +222,10 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
         parameter_guidance=parameter_guidance,
         invalid_call_examples=[
             "Do not pass model, base_url, api_key, timeout_seconds, retry_count, send_size, or send_quality to formal preset tools."
-            if is_formal_tool
-            else "For gpt-image-2-url, choose only size pairs listed in supported_size_presets."
         ],
         env_vars=[
             runtime_config.env_names.api_key,
             runtime_config.env_names.preset,
-            runtime_config.env_names.base_url,
-            runtime_config.env_names.model,
-            runtime_config.env_names.supported_models,
             IMAGE_OUTPUT_DIR_ENV,
             IMAGE_BASE_URL_ENV,
             IMAGE_HTTP_TIMEOUT_SECONDS_ENV,
@@ -213,14 +239,45 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
     )
 
 
-def list_image_tools_catalog(version: ToolVersion) -> ToolCatalogResponse:
-    """执行 list_image_tools_catalog，用于 preset 基类执行框架 场景下的当前步骤处理。
-    
-    处理流程：
-        - 步骤 1：汇总可用工具信息并对外返回
-        - 步骤 2：遍历配置后生成统一目录结构
-    """
+def _temporary_entry(tool_name: str, protocol: PresetProtocol) -> ToolCatalogEntry:
+    parameter_guidance = _temporary_guidance(protocol)
+    is_nano = protocol is PresetProtocol.GEMINI_GENERATE_CONTENT
+    return ToolCatalogEntry(
+        tool_name=tool_name,
+        tool_version=ToolVersion.V1,
+        title=tool_name.replace("_", " ").title(),
+        tool_kind=ToolKind.TEMPORARY,
+        modes=["generate"],
+        active_preset_id=None,
+        active_preset_class=None,
+        stability=PresetStability.EXPERIMENTAL,
+        provider=PresetProvider.CUSTOM.value,
+        protocol=protocol.value,
+        base_url="",
+        model="",
+        model_parameter=parameter_guidance["model"],
+        api_key_configured=False,
+        supported_size_presets=[
+            f"{preset.tier.value} + {preset.aspect_ratio.value} (gpt={preset.gpt_value}, nano={preset.nano_banana_value})"
+            if is_nano
+            else f"{preset.tier.value} + {preset.aspect_ratio.value} (gpt={preset.gpt_value})"
+            for preset in SUPPORTED_IMAGE_SIZES.all()
+        ],
+        unsupported_size_presets=[],
+        parameter_guidance=parameter_guidance,
+        invalid_call_examples=[
+            "Do not use temporary tools for production defaults; promote successful provider probes into reviewed preset classes."
+        ],
+        env_vars=[IMAGE_OUTPUT_DIR_ENV, IMAGE_BASE_URL_ENV, IMAGE_HTTP_TIMEOUT_SECONDS_ENV, LOG_LEVEL_ENV],
+        env_values_non_secret=_temporary_non_secret_values(),
+        notes=[
+            "Temporary exploration tool; api_key, base_url, and model are supplied per call.",
+            f"Default request timeout is {DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS} seconds unless timeout_seconds is supplied per call.",
+        ],
+    )
 
+
+def list_image_tools_catalog(version: ToolVersion) -> ToolCatalogResponse:
     request = CatalogRequest(version=version)
     if request.version is not ToolVersion.V1:
         raise ValidationError(CATALOG_TOOL_NAME, "catalog", "only version v1 is supported")
@@ -232,6 +289,7 @@ def list_image_tools_catalog(version: ToolVersion) -> ToolCatalogResponse:
         tools=[
             _entry_for(settings.gpt_image_2_official_config()),
             _entry_for(settings.nano_banana_2_official_config()),
-            _entry_for(settings.gpt_image_2_url_config()),
+            _temporary_entry(GPT_IMAGE_2_TEMPORARY_NAME, PresetProtocol.OPENAI_IMAGES),
+            _temporary_entry(NANO_BANANA_2_TEMPORARY_NAME, PresetProtocol.GEMINI_GENERATE_CONTENT),
         ],
     )
