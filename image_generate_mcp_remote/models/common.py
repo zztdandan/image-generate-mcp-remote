@@ -8,7 +8,15 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import BaseModel, Field
 
 from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
-from ..contracts.presets import ParameterGuidance, PresetStability, ToolKind
+from ..contracts.presets import (
+    ParameterGuidance,
+    PresetModeSupport,
+    PresetProtocol,
+    PresetProvider,
+    PresetStability,
+    PresetToolName,
+    ToolKind,
+)
 
 JSONScalar: TypeAlias = str | int | float | bool | None
 JSONValue: TypeAlias = JSONScalar | list["JSONValue"] | dict[str, "JSONValue"]
@@ -240,3 +248,36 @@ class ToolCatalogResponse(BaseModel):
     service_name: str
     service_version: str
     tools: list[ToolCatalogEntry]
+
+
+class PresetCatalogEntry(BaseModel):
+    """PresetCatalogEntry 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
+
+    preset_id: str
+    preset_class: str
+    tool_name: PresetToolName
+    provider: PresetProvider
+    protocol: PresetProtocol
+    default_model: str
+    supported_models: list[str]
+    base_url: str
+    modes: list[PresetModeSupport]
+    stability: PresetStability
+
+
+class PresetCatalogResponse(BaseModel):
+    """PresetCatalogResponse 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
+
+    职责：
+        - 定义该场景下必须字段与可选字段的语义边界
+        - 作为模块间传递对象，保证类型与字段命名一致
+    """
+
+    service_name: str
+    service_version: str
+    presets: list[PresetCatalogEntry]

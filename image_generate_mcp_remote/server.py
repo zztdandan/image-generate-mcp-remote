@@ -31,6 +31,7 @@ from .tools.nano_banana_2_official import (
     nano_banana_2_official_edit,
     nano_banana_2_official_generate,
 )
+from .tools.preset_catalog import list_image_presets
 logger = logging.getLogger(__name__)
 mcp = FastMCP(name="Image Generate MCP Remote")
 
@@ -79,6 +80,21 @@ def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
     """
 
     return list_image_tools_catalog(version).model_dump(mode="json")
+
+
+@mcp.tool(
+    title="Preset Catalog",
+    description="List registered presets with bound tool, base URL, and default model",
+)
+def list_image_presets_tool(version: ToolVersion) -> dict[str, object]:
+    """执行 list_image_presets_tool，用于 MCP 工具入口编排 场景下的当前步骤处理。
+
+    处理流程：
+        - 步骤 1：汇总所有已注册 preset 的基础信息
+        - 步骤 2：输出统一的 preset 列表结构
+    """
+
+    return list_image_presets(version).model_dump(mode="json")
 
 
 @mcp.tool(

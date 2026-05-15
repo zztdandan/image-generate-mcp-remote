@@ -1,5 +1,5 @@
 from image_generate_mcp_remote.models.common import ToolVersion
-from image_generate_mcp_remote.server import list_image_tools_catalog_tool
+from image_generate_mcp_remote.server import list_image_presets_tool, list_image_tools_catalog_tool
 
 
 def test_server_catalog_tool_returns_expected_shape():
@@ -7,3 +7,10 @@ def test_server_catalog_tool_returns_expected_shape():
 
     assert result["service_name"] == "image-generate-mcp-remote"
     assert len(result["tools"]) == 4
+
+
+def test_server_preset_catalog_tool_returns_expected_shape():
+    result = list_image_presets_tool(ToolVersion.V1)
+
+    assert result["service_name"] == "image-generate-mcp-remote"
+    assert len(result["presets"]) >= 2
