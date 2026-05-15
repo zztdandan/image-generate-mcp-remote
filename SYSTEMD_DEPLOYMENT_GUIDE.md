@@ -95,23 +95,12 @@ WantedBy=default.target
 
 ```dotenv
 IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY=...
-IMG_GEN_GPT_IMAGE_2_OFFICIAL_BASE_URL=https://api.openai.com/v1
-IMG_GEN_GPT_IMAGE_2_OFFICIAL_MODEL=gpt-image-2
-IMG_GEN_GPT_IMAGE_2_OFFICIAL_SUPPORTED_MODELS=gpt-image-2
+IMG_GEN_GPT_IMAGE_2_OFFICIAL_PRESET=openai_gpt_image_2
 
 IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY=...
-IMG_GEN_NANO_BANANA_2_OFFICIAL_BASE_URL=https://generativelanguage.googleapis.com
-IMG_GEN_NANO_BANANA_2_OFFICIAL_MODEL=gemini-3.1-flash-image-preview
-IMG_GEN_NANO_BANANA_2_OFFICIAL_SUPPORTED_MODELS=gemini-3.1-flash-image-preview
-
-IMG_GEN_GPT_IMAGE_2_URL_API_KEY=...
-IMG_GEN_GPT_IMAGE_2_URL_BASE_URL=https://www.right.codes/draw/v1
-IMG_GEN_GPT_IMAGE_2_URL_MODEL=gpt-image-2-vip
-IMG_GEN_GPT_IMAGE_2_URL_SUPPORTED_MODELS=gpt-image-2-vip
+IMG_GEN_NANO_BANANA_2_OFFICIAL_PRESET=google_nano_banana
 
 IMAGE_OUTPUT_DIR=storage/images
-IMAGE_BASE_URL=
-IMAGE_HTTP_TIMEOUT_SECONDS=180
 LOG_LEVEL=INFO
 ```
 
@@ -202,22 +191,22 @@ journalctl --user -u image-generate-mcp.service -n 100 --no-pager
       ],
       "timeout": 500000,
       "cwd": "/absolute/path/to/image-generate-mcp-remote",
-      "env": {
-        "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY": "sk-xxxx",
-        "IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY": "sk-xxxx",
-        "IMG_GEN_GPT_IMAGE_2_URL_API_KEY": "sk-xxxx",
-        "IMAGE_OUTPUT_DIR": "storage/images",
-        "IMAGE_HTTP_TIMEOUT_SECONDS": "600",
-        "LOG_LEVEL": "INFO"
+        "env": {
+          "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY": "sk-xxxx",
+          "IMG_GEN_GPT_IMAGE_2_OFFICIAL_PRESET": "openai_gpt_image_2",
+          "IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY": "sk-xxxx",
+          "IMG_GEN_NANO_BANANA_2_OFFICIAL_PRESET": "google_nano_banana",
+          "IMAGE_OUTPUT_DIR": "storage/images",
+          "LOG_LEVEL": "INFO"
+        }
       }
-    }
   }
 }
 ```
 
 注意：只有 `stdio` 这种客户端拉起进程的模式，`env` 才会直接生效到服务进程。
 注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。
-生图调用耗时较长，`IMAGE_HTTP_TIMEOUT_SECONDS` 只控制本服务请求上游生图接口及下载图片的 HTTP 超时；如果客户端支持 MCP tool-call 超时配置，文档推荐显式配置为 `500000` 毫秒（500 秒），避免默认 `30` 秒过早超时；同时也应知道渠道极不稳定时最长可能接近 `12` 分钟。
+生图调用耗时较长，正式工具的上游 HTTP 超时与重试由 active preset 决定；如果客户端支持 MCP tool-call 超时配置，文档推荐显式配置为 `500000` 毫秒（500 秒），避免默认 `30` 秒过早超时；同时也应知道渠道极不稳定时最长可能接近 `12` 分钟。
 
 ## 9. 常见问题
 

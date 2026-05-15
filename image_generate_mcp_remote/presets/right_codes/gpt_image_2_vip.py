@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetProvider, PresetStability
+from ...contracts.presets import PresetProvider, PresetRuntimeConfig, PresetStability
 
 
 class RightCodesGptImage2VipPreset(BaseGptImage2Preset):
@@ -20,3 +20,4 @@ class RightCodesGptImage2VipPreset(BaseGptImage2Preset):
     model = "gpt-image-2-vip"
     stability = PresetStability.EXPERIMENTAL
     notes = ("Model is visible but archived docs did not obtain a successful sample; do not use as default.",)
+    runtime = PresetRuntimeConfig(timeout_seconds=240.0, retry_count=1)

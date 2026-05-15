@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider
+from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, PresetRuntimeConfig
 
 
 class LaoZhangGptImage2VipPreset(BaseGptImage2Preset):
@@ -25,4 +25,5 @@ class LaoZhangGptImage2VipPreset(BaseGptImage2Preset):
         background=PresetFieldDispatchMode.SEND,
         moderation=PresetFieldDispatchMode.SEND,
     )
+    runtime = PresetRuntimeConfig(timeout_seconds=240.0, retry_count=1)
     notes = ("LaoZhang gpt-image-2-vip supports explicit size but not quality according to archived docs.",)

@@ -7,6 +7,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, Field
 
+from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
 from ..contracts.presets import ParameterGuidance, PresetStability, ToolKind
 
 JSONScalar: TypeAlias = str | int | float | bool | None
@@ -134,6 +135,23 @@ class UsageInfo(BaseModel):
     total_tokens: int | None = None
 
 
+class ActualSizeVerificationResult(BaseModel):
+    """ActualSizeVerificationResult 是 实际尺寸核对结果 的结构模型，作用范围为本模块数据边界与调用契约。
+    
+    职责：
+        - 表达请求尺寸合同与实际返回尺寸之间的一致性结果
+        - 仅返回核对事实，不把不一致强制升级为 warning 或 error
+    """
+
+    requested_image_size: ImageSizeTier
+    requested_aspect_ratio: ImageAspectRatio
+    expected_width: int
+    expected_height: int
+    actual_width: int
+    actual_height: int
+    is_consistent: bool
+
+
 class ImageToolResult(BaseModel):
     """ImageToolResult 是 跨工具通用数据模型 的结构模型，作用范围为本模块数据边界与调用契约。
     
@@ -153,6 +171,7 @@ class ImageToolResult(BaseModel):
     elapsed_seconds: float
     width: int | None = None
     height: int | None = None
+    actual_size_verification: ActualSizeVerificationResult | None = None
     usage: UsageInfo | None = None
     provider_response_excerpt: dict[str, str] | None = None
     text_output: str | None = None
@@ -173,9 +192,10 @@ class ToolEnvValuesNonSecret(BaseModel):
     supported_models: list[str]
     supported_models_source: str
     output_dir: str
-    image_base_url: str
-    image_base_url_source: str
-    image_http_timeout_seconds: float
+    request_timeout_seconds: float
+    request_timeout_source: str
+    retry_count: int
+    retry_count_source: str
 
 
 class ToolCatalogEntry(BaseModel):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import time
 import mimetypes
 
@@ -31,7 +32,7 @@ from ..contracts.presets import (
     UnsupportedSizePreset,
 )
 from ..errors import ConfigError, ResponseParseError, UpstreamErrorDetail, UpstreamServiceError, ValidationError
-from ..models.common import ImageToolMode, ImageToolResult, ResolvedInputImage, ToolVersion, UsageInfo
+from ..models.common import ActualSizeVerificationResult, ImageToolMode, ImageToolResult, ResolvedInputImage, ToolVersion, UsageInfo
 from .input_images import resolve_input_image
 from .models import GptImage2EditExecutionRequest, GptImage2ExecutionRequest, GptImage2GenerateExecutionRequest, GptImage2PreparedRequest, NanoBananaEditExecutionRequest, NanoBananaExecutionRequest, NanoBananaPreparedRequest, ResolvedImageToolPreset
 
@@ -42,6 +43,7 @@ GPT_IMAGE_EDITS_PATH = "/images/edits"
 GPT_IMAGE_RESPONSE_EXCERPT_LIMIT = 400
 NANO_BANANA_RESPONSE_EXCERPT_LIMIT = 400
 RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
+logger = logging.getLogger(__name__)
 
 
 class BaseImageToolPreset:
@@ -178,6 +180,31 @@ class BaseImageToolPreset:
         unsupported_keys = {(item.image_size, item.aspect_ratio) for item in config.unsupported_sizes}
         return tuple(item for item in SupportedImageSizes.all() if (item.tier, item.aspect_ratio) not in unsupported_keys)
 
+    def verify_actual_size(
+        self,
+        image_size: ImageSizeTier,
+        aspect_ratio: ImageAspectRatio,
+        actual_width: int,
+        actual_height: int,
+    ) -> ActualSizeVerificationResult:
+        """执行 verify_actual_size，用于 preset 契约定义 场景下的当前步骤处理。
+        
+        处理流程：
+            - 步骤 1：根据共享尺寸合同解析当前请求的预期尺寸
+            - 步骤 2：返回实际尺寸与预期尺寸的一致性结果，不把不一致视为错误
+        """
+
+        expected_size = SupportedImageSizes.resolve(image_size, aspect_ratio).size_for_provider(self.size_provider)
+        return ActualSizeVerificationResult(
+            requested_image_size=image_size,
+            requested_aspect_ratio=aspect_ratio,
+            expected_width=expected_size.width,
+            expected_height=expected_size.height,
+            actual_width=actual_width,
+            actual_height=actual_height,
+            is_consistent=actual_width == expected_size.width and actual_height == expected_size.height,
+        )
+
 
 class BaseGptImage2Preset(BaseImageToolPreset):
     """BaseGptImage2Preset 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
@@ -208,6 +235,17 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         mode = PresetModeSupport(request.mode.value)
         self.validate_tool_request(mode, request.image_size, request.aspect_ratio)
         prepared = self.prepare_gpt_image_2_request(request)
+        logger.info(
+            "Starting GPT image request preset=%s model=%s mode=%s image_size=%s aspect_ratio=%s timeout_seconds=%.1f retry_count=%d save_path=%s",
+            self.resolve().config.preset_id,
+            self.resolve().config.model,
+            request.mode.value,
+            request.image_size.value,
+            request.aspect_ratio.value,
+            self.resolve().config.runtime.timeout_seconds,
+            self.resolve().config.runtime.retry_count,
+            request.save_path,
+        )
         started_at = time.perf_counter()
         raw_response = self.send_gpt_image_2_request(request, prepared, api_key)
         elapsed_seconds = time.perf_counter() - started_at
@@ -266,13 +304,39 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         total_attempts = self.resolve().config.runtime.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
         for attempt in range(1, total_attempts + 1):
             try:
+                logger.info(
+                    "Sending GPT image upstream request preset=%s attempt=%d/%d endpoint=%s timeout_seconds=%.1f payload_keys=%s has_files=%s",
+                    self.resolve().config.preset_id,
+                    attempt,
+                    total_attempts,
+                    endpoint,
+                    self.resolve().config.runtime.timeout_seconds,
+                    sorted(prepared.payload.keys()),
+                    bool(prepared.files),
+                )
                 if mode is PresetModeSupport.EDIT:
                     response = httpx.post(endpoint, headers=headers, data={key: str(value) for key, value in prepared.payload.items()}, files=prepared.files, timeout=self.resolve().config.runtime.timeout_seconds)
                 else:
                     response = httpx.post(endpoint, headers=headers, json=prepared.payload, timeout=self.resolve().config.runtime.timeout_seconds)
+                logger.info(
+                    "Received GPT image upstream response preset=%s attempt=%d/%d status_code=%d",
+                    self.resolve().config.preset_id,
+                    attempt,
+                    total_attempts,
+                    response.status_code,
+                )
                 return self.handle_gpt_image_2_upstream_response(mode, response)
             except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
                 last_error = exc
+                logger.warning(
+                    "GPT image upstream request failed preset=%s attempt=%d/%d error_type=%s will_retry=%s message=%s",
+                    self.resolve().config.preset_id,
+                    attempt,
+                    total_attempts,
+                    exc.__class__.__name__,
+                    attempt < total_attempts,
+                    str(exc),
+                )
                 if attempt == total_attempts:
                     raise
         if last_error is not None:
@@ -311,6 +375,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         from ..storage import build_image_uri, require_image_dimensions, save_image_bytes_to_path
 
         width, height = require_image_dimensions(self.tool_name.value, request.mode.value, image_bytes)
+        actual_size_verification = self.verify_actual_size(request.image_size, request.aspect_ratio, width, height)
         file_path = save_image_bytes_to_path(image_bytes, request.save_path)
         return ImageToolResult(
             tool_name=self.tool_name.value,
@@ -323,6 +388,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
             elapsed_seconds=elapsed_seconds,
             width=width,
             height=height,
+            actual_size_verification=actual_size_verification,
             usage=self.extract_openai_usage(response_json),
             provider_response_excerpt=self.gpt_provider_excerpt(response_json, provider_excerpt_source_url),
         )
@@ -500,6 +566,7 @@ class BaseNanoBananaPreset(BaseImageToolPreset):
                         from ..storage import build_image_uri, require_image_dimensions, save_image_bytes_to_path
 
                         width, height = require_image_dimensions(self.tool_name.value, request.mode.value, image_bytes)
+                        actual_size_verification = self.verify_actual_size(request.image_size, request.aspect_ratio, width, height)
                         file_path = save_image_bytes_to_path(image_bytes, request.save_path)
                         return ImageToolResult(
                             tool_name=self.tool_name.value,
@@ -512,6 +579,7 @@ class BaseNanoBananaPreset(BaseImageToolPreset):
                             elapsed_seconds=elapsed_seconds,
                             width=width,
                             height=height,
+                            actual_size_verification=actual_size_verification,
                             usage=self.nano_usage_info(response_json),
                             provider_response_excerpt=self.nano_provider_excerpt(response_json),
                             text_output="\n".join(text_fragments) if ImageResponseModality.TEXT in request.response_modalities and text_fragments else None,

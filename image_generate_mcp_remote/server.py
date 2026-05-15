@@ -86,6 +86,8 @@ def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
     description=(
         "Generate or edit images via the OpenAI Images compatible gateway. "
         "The active startup preset owns provider, model, timeout, retry, and field dispatch behavior. "
+        "You may override preset and api_key per call; if preset is supplied, api_key is required in the same request. "
+        "Without overrides, the configured preset and API key are used. "
         "Select image_size plus aspect_ratio from the catalog enums to derive the provider size preset. "
         "Call list_image_tools_catalog first when you need the current supported size presets."
     ),
@@ -103,6 +105,8 @@ def gpt_image_2_official(
     background: GptImageBackground = GptImageBackground.AUTO,
     moderation: GptImageModeration = GptImageModeration.AUTO,
     n: GptImageCount = GptImageCount.SINGLE,
+    preset: str | None = None,
+    api_key: str | None = None,
     images: list[InputImage] | None = None,
     mask: InputImage | None = None,
 ) -> dict[str, object]:
@@ -127,6 +131,8 @@ def gpt_image_2_official(
             background=background,
             moderation=moderation,
             n=n,
+            preset=preset,
+            api_key=api_key,
         ).model_dump(mode="json")
     return gpt_image_2_official_edit(
         version=version,
@@ -141,6 +147,8 @@ def gpt_image_2_official(
             output_format=output_format,
             output_compression=output_compression,
             background=background,
+            preset=preset,
+            api_key=api_key,
         ).model_dump(mode="json")
 
 
@@ -149,6 +157,8 @@ def gpt_image_2_official(
     description=(
         "Generate or edit images via the Gemini compatible gateway. "
         "The active startup preset owns provider, model, timeout, retry, and field dispatch behavior. "
+        "You may override preset and api_key per call; if preset is supplied, api_key is required in the same request. "
+        "Without overrides, the configured preset and API key are used. "
         "Use image_size plus aspect_ratio from the shared catalog enums. "
         "Invalid size errors include the supported preset list."
     ),
@@ -163,6 +173,8 @@ def nano_banana_2_official(
     image_size: NanoBananaImageSize = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
+    preset: str | None = None,
+    api_key: str | None = None,
     input_images: list[InputImage] | None = None,
 ) -> dict[str, object]:
     """执行 nano_banana_2_official，用于 MCP 工具入口编排 场景下的当前步骤处理。
@@ -183,6 +195,8 @@ def nano_banana_2_official(
             image_size=image_size,
             thinking_level=thinking_level,
             include_thoughts=include_thoughts,
+            preset=preset,
+            api_key=api_key,
         ).model_dump(mode="json")
     return nano_banana_2_official_edit(
         version=version,
@@ -195,6 +209,8 @@ def nano_banana_2_official(
         image_size=image_size,
         thinking_level=thinking_level,
         include_thoughts=include_thoughts,
+        preset=preset,
+        api_key=api_key,
     ).model_dump(mode="json")
 
 

@@ -31,9 +31,7 @@ NANO_BANANA_2_OFFICIAL_API_KEY_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY"
 NANO_BANANA_2_OFFICIAL_PRESET_ENV = "IMG_GEN_NANO_BANANA_2_OFFICIAL_PRESET"
 
 IMAGE_OUTPUT_DIR_ENV = "IMAGE_OUTPUT_DIR"
-IMAGE_BASE_URL_ENV = "IMAGE_BASE_URL"
 LOG_LEVEL_ENV = "LOG_LEVEL"
-IMAGE_HTTP_TIMEOUT_SECONDS_ENV = "IMAGE_HTTP_TIMEOUT_SECONDS"
 
 
 class ToolEnvironmentNames(BaseModel):
@@ -61,6 +59,8 @@ class ToolRuntimeConfig(BaseModel):
     modes: list[ImageToolMode]
     effective_base_url: str
     effective_model: str
+    effective_timeout_seconds: float
+    effective_retry_count: int
     api_key: str
     api_key_configured: bool
     env_names: ToolEnvironmentNames
@@ -83,8 +83,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     image_output_dir: Path = Field(default=DEFAULT_OUTPUT_DIR, alias=IMAGE_OUTPUT_DIR_ENV)
-    image_base_url: str = Field(default="", alias=IMAGE_BASE_URL_ENV)
-    image_http_timeout_seconds: float = Field(default=DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, alias=IMAGE_HTTP_TIMEOUT_SECONDS_ENV)
     log_level: str = Field(default=DEFAULT_LOG_LEVEL, alias=LOG_LEVEL_ENV)
 
     gpt_image_2_official_api_key: str = Field(default="", alias=GPT_IMAGE_2_OFFICIAL_API_KEY_ENV)
@@ -123,6 +121,8 @@ class Settings(BaseSettings):
             modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
             effective_base_url=resolved.config.base_url,
             effective_model=resolved.config.model,
+            effective_timeout_seconds=resolved.config.runtime.timeout_seconds,
+            effective_retry_count=resolved.config.runtime.retry_count,
             api_key=effective_api_key,
             api_key_configured=bool(effective_api_key),
             env_names=ToolEnvironmentNames(
@@ -155,6 +155,8 @@ class Settings(BaseSettings):
             modes=[ImageToolMode.GENERATE, ImageToolMode.EDIT],
             effective_base_url=resolved.config.base_url,
             effective_model=resolved.config.model,
+            effective_timeout_seconds=resolved.config.runtime.timeout_seconds,
+            effective_retry_count=resolved.config.runtime.retry_count,
             api_key=effective_api_key,
             api_key_configured=bool(effective_api_key),
             env_names=ToolEnvironmentNames(

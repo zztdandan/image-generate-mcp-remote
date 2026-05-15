@@ -10,8 +10,8 @@ from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
 from ..contracts.presets import PresetToolName
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ToolVersion
 from ..presets.base import BaseGptImage2Preset
-from ..presets.loader import resolve_preset_for_tool
 from ..presets.models import GptImage2EditExecutionRequest, GptImage2GenerateExecutionRequest
+from .official_common import resolve_official_preset_execution
 
 GptImageQuality = ImageQuality
 GptImageOutputFormat = ImageOutputFormat
@@ -19,7 +19,11 @@ GptImageBackground = ImageBackground
 GptImageModeration = ImageModeration
 GptImageCount = ImageCount
 
-def _active_gpt_image_2_preset() -> BaseGptImage2Preset:
+def _active_gpt_image_2_preset(
+    mode: ImageToolMode,
+    preset: str | None,
+    api_key: str | None,
+) -> tuple[BaseGptImage2Preset, str]:
     """执行 _active_gpt_image_2_preset，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：
@@ -28,10 +32,17 @@ def _active_gpt_image_2_preset() -> BaseGptImage2Preset:
     """
 
     settings = get_settings()
-    preset = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, settings.gpt_image_2_official_preset)
-    if not isinstance(preset, BaseGptImage2Preset):
+    resolved_execution = resolve_official_preset_execution(
+        tool_name=PresetToolName.GPT_IMAGE_2_OFFICIAL,
+        mode=mode,
+        configured_preset=settings.gpt_image_2_official_preset,
+        configured_api_key=settings.gpt_image_2_official_api_key,
+        request_preset=preset,
+        request_api_key=api_key,
+    )
+    if not isinstance(resolved_execution.preset, BaseGptImage2Preset):
         raise TypeError("active gpt_image_2_official preset must inherit BaseGptImage2Preset")
-    return preset
+    return resolved_execution.preset, resolved_execution.api_key
 
 
 def gpt_image_2_official_generate(
@@ -47,6 +58,8 @@ def gpt_image_2_official_generate(
     background: GptImageBackground = GptImageBackground.AUTO,
     moderation: GptImageModeration = GptImageModeration.AUTO,
     n: GptImageCount = GptImageCount.SINGLE,
+    preset: str | None = None,
+    api_key: str | None = None,
 ) -> ImageToolResult:
     """执行 gpt_image_2_official_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
     
@@ -69,7 +82,8 @@ def gpt_image_2_official_generate(
         moderation=moderation,
         n=n,
     )
-    return _active_gpt_image_2_preset().execute_gpt_image_2(execution_request, get_settings().gpt_image_2_official_api_key)
+    active_preset, effective_api_key = _active_gpt_image_2_preset(mode=mode, preset=preset, api_key=api_key)
+    return active_preset.execute_gpt_image_2(execution_request, effective_api_key)
 
 
 def gpt_image_2_official_edit(
@@ -85,6 +99,8 @@ def gpt_image_2_official_edit(
     output_format: GptImageOutputFormat = GptImageOutputFormat.PNG,
     output_compression: int | None = None,
     background: GptImageBackground = GptImageBackground.AUTO,
+    preset: str | None = None,
+    api_key: str | None = None,
 ) -> ImageToolResult:
     """执行 gpt_image_2_official_edit，用于 preset 基类执行框架 场景下的当前步骤处理。
     
@@ -107,4 +123,5 @@ def gpt_image_2_official_edit(
         output_compression=output_compression,
         background=background,
     )
-    return _active_gpt_image_2_preset().execute_gpt_image_2(execution_request, get_settings().gpt_image_2_official_api_key)
+    active_preset, effective_api_key = _active_gpt_image_2_preset(mode=mode, preset=preset, api_key=api_key)
+    return active_preset.execute_gpt_image_2(execution_request, effective_api_key)

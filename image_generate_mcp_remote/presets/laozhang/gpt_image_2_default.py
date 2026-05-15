@@ -18,8 +18,8 @@ class LaoZhangGptImage2DefaultPreset(BaseGptImage2Preset):
     provider = PresetProvider.LAOZHANG
     base_url = "https://api.laozhang.ai/v1"
     dispatch = PresetDispatchPolicy(
-        size=PresetFieldDispatchMode.DROP,
-        quality=PresetFieldDispatchMode.DROP,
+        size=PresetFieldDispatchMode.PROMPT_FALLBACK,
+        quality=PresetFieldDispatchMode.PROMPT_FALLBACK,
         output_format=PresetFieldDispatchMode.SEND,
         background=PresetFieldDispatchMode.SEND,
         moderation=PresetFieldDispatchMode.SEND,

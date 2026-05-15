@@ -8,8 +8,6 @@ from pydantic import BaseModel
 
 from ..config import (
     DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-    IMAGE_BASE_URL_ENV,
-    IMAGE_HTTP_TIMEOUT_SECONDS_ENV,
     IMAGE_OUTPUT_DIR_ENV,
     LOG_LEVEL_ENV,
     SERVICE_NAME,
@@ -44,9 +42,10 @@ def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSec
         supported_models=[runtime_config.effective_model],
         supported_models_source="preset",
         output_dir=str(Path(settings.image_output_dir)),
-        image_base_url=settings.image_base_url,
-        image_base_url_source="env" if settings.image_base_url else "default",
-        image_http_timeout_seconds=settings.image_http_timeout_seconds,
+        request_timeout_seconds=runtime_config.effective_timeout_seconds,
+        request_timeout_source="preset",
+        retry_count=runtime_config.effective_retry_count,
+        retry_count_source="preset",
     )
 
 
@@ -60,9 +59,10 @@ def _temporary_non_secret_values() -> ToolEnvValuesNonSecret:
         supported_models=[],
         supported_models_source="per_call",
         output_dir=str(Path(settings.image_output_dir)),
-        image_base_url=settings.image_base_url,
-        image_base_url_source="env" if settings.image_base_url else "default",
-        image_http_timeout_seconds=settings.image_http_timeout_seconds,
+        request_timeout_seconds=DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
+        request_timeout_source="per_call_default",
+        retry_count=0,
+        retry_count_source="fixed",
     )
 
 
@@ -105,6 +105,17 @@ def _guidance_for_formal_tool(runtime_config: ToolRuntimeConfig) -> dict[str, Pa
             allowed_by_preset=False,
             locked_value=resolved.config.model,
             guidance="model is preset-owned; do not pass model per call",
+        ),
+        "preset": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            guidance="preset is optional per call; if you pass preset, you must also pass api_key in the same request; otherwise the configured preset is used",
+        ),
+        "api_key": ParameterGuidance(
+            accepted_by_mcp=True,
+            allowed_by_preset=True,
+            guidance="api_key is optional per call; if preset is provided in the same request, api_key becomes required; otherwise the configured API key is used",
+            must_pair_with="preset",
         ),
         "mode": ParameterGuidance(
             accepted_by_mcp=True,
@@ -221,19 +232,18 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
         unsupported_size_presets=_unsupported_size_presets(runtime_config),
         parameter_guidance=parameter_guidance,
         invalid_call_examples=[
-            "Do not pass model, base_url, api_key, timeout_seconds, retry_count, send_size, or send_quality to formal preset tools."
+            "Do not pass model, base_url, timeout_seconds, retry_count, send_size, or send_quality to formal preset tools."
         ],
         env_vars=[
             runtime_config.env_names.api_key,
             runtime_config.env_names.preset,
             IMAGE_OUTPUT_DIR_ENV,
-            IMAGE_BASE_URL_ENV,
-            IMAGE_HTTP_TIMEOUT_SECONDS_ENV,
             LOG_LEVEL_ENV,
         ],
         env_values_non_secret=_non_secret_values(runtime_config),
         notes=[
             "Catalog omits API key values and any masked derivatives.",
+            "Formal tool timeout and retry behavior are owned by the active preset, not by global timeout env vars.",
             *runtime_config.notes,
         ],
     )
@@ -268,7 +278,7 @@ def _temporary_entry(tool_name: str, protocol: PresetProtocol) -> ToolCatalogEnt
         invalid_call_examples=[
             "Do not use temporary tools for production defaults; promote successful provider probes into reviewed preset classes."
         ],
-        env_vars=[IMAGE_OUTPUT_DIR_ENV, IMAGE_BASE_URL_ENV, IMAGE_HTTP_TIMEOUT_SECONDS_ENV, LOG_LEVEL_ENV],
+        env_vars=[IMAGE_OUTPUT_DIR_ENV, LOG_LEVEL_ENV],
         env_values_non_secret=_temporary_non_secret_values(),
         notes=[
             "Temporary exploration tool; api_key, base_url, and model are supplied per call.",

@@ -17,7 +17,6 @@ OUTPUT_EXTENSION_BY_MIME = {
     "image/webp": ".webp",
 }
 IMAGE_OUTPUT_DIR_ENV = "IMAGE_OUTPUT_DIR"
-IMAGE_BASE_URL_ENV = "IMAGE_BASE_URL"
 DEFAULT_OUTPUT_DIR = "storage/images"
 
 
@@ -42,9 +41,6 @@ def build_image_uri(path: Path) -> str:
         - 步骤 2：组装字段并产出稳定结构
     """
 
-    image_base_url = os.getenv(IMAGE_BASE_URL_ENV, "")
-    if image_base_url:
-        return f"{image_base_url.rstrip('/')}/{path.name}"
     return path.resolve().as_uri()
 
 

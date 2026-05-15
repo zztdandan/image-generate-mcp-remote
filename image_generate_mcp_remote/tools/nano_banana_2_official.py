@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import Literal
 
 from ..contracts.enums import ImageResponseModality, ImageThinkingLevel
+from ..config import get_settings
 from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
 from ..contracts.presets import PresetToolName
 from ..models.common import ImageToolMode, ImageToolResult, InputImage, ToolVersion
 from ..presets.base import BaseNanoBananaPreset
-from ..presets.loader import resolve_preset_for_tool
 from ..presets.models import NanoBananaEditExecutionRequest, NanoBananaGenerateExecutionRequest
-from ..config import get_settings
+from .official_common import resolve_official_preset_execution
 
 ResponseModality = ImageResponseModality
 NanoBananaAspectRatio = ImageAspectRatio
@@ -23,7 +23,11 @@ def _validate_response_modalities(response_modalities: list[ResponseModality]) -
         raise ValueError("response_modalities must include IMAGE")
 
 
-def _active_nano_banana_preset() -> BaseNanoBananaPreset:
+def _active_nano_banana_preset(
+    mode: ImageToolMode,
+    preset: str | None,
+    api_key: str | None,
+) -> tuple[BaseNanoBananaPreset, str]:
     """执行 _active_nano_banana_preset，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：
@@ -32,10 +36,17 @@ def _active_nano_banana_preset() -> BaseNanoBananaPreset:
     """
 
     settings = get_settings()
-    preset = resolve_preset_for_tool(PresetToolName.NANO_BANANA_2_OFFICIAL, settings.nano_banana_2_official_preset)
-    if not isinstance(preset, BaseNanoBananaPreset):
+    resolved_execution = resolve_official_preset_execution(
+        tool_name=PresetToolName.NANO_BANANA_2_OFFICIAL,
+        mode=mode,
+        configured_preset=settings.nano_banana_2_official_preset,
+        configured_api_key=settings.nano_banana_2_official_api_key,
+        request_preset=preset,
+        request_api_key=api_key,
+    )
+    if not isinstance(resolved_execution.preset, BaseNanoBananaPreset):
         raise TypeError("active nano_banana_2_official preset must inherit BaseNanoBananaPreset")
-    return preset
+    return resolved_execution.preset, resolved_execution.api_key
 
 
 def nano_banana_2_official_generate(
@@ -48,6 +59,8 @@ def nano_banana_2_official_generate(
     image_size: NanoBananaImageSize = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
+    preset: str | None = None,
+    api_key: str | None = None,
 ) -> ImageToolResult:
     """执行 nano_banana_2_official_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
     
@@ -68,7 +81,8 @@ def nano_banana_2_official_generate(
         include_thoughts=include_thoughts,
     )
     _validate_response_modalities(execution_request.response_modalities)
-    return _active_nano_banana_preset().execute_nano_banana(execution_request, get_settings().nano_banana_2_official_api_key)
+    active_preset, effective_api_key = _active_nano_banana_preset(mode=mode, preset=preset, api_key=api_key)
+    return active_preset.execute_nano_banana(execution_request, effective_api_key)
 
 
 def nano_banana_2_official_edit(
@@ -82,6 +96,8 @@ def nano_banana_2_official_edit(
     image_size: NanoBananaImageSize = NanoBananaImageSize.SIZE_1K,
     thinking_level: NanoBananaThinkingLevel = NanoBananaThinkingLevel.MINIMAL,
     include_thoughts: bool = False,
+    preset: str | None = None,
+    api_key: str | None = None,
 ) -> ImageToolResult:
     """执行 nano_banana_2_official_edit，用于 preset 基类执行框架 场景下的当前步骤处理。
     
@@ -105,4 +121,5 @@ def nano_banana_2_official_edit(
     _validate_response_modalities(execution_request.response_modalities)
     if not execution_request.input_images:
         raise ValueError("input_images must contain at least one item")
-    return _active_nano_banana_preset().execute_nano_banana(execution_request, get_settings().nano_banana_2_official_api_key)
+    active_preset, effective_api_key = _active_nano_banana_preset(mode=mode, preset=preset, api_key=api_key)
+    return active_preset.execute_nano_banana(execution_request, effective_api_key)
