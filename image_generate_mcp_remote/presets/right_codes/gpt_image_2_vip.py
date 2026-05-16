@@ -20,4 +20,4 @@ class RightCodesGptImage2VipPreset(BaseGptImage2Preset):
     model = "gpt-image-2-vip"
     stability = PresetStability.EXPERIMENTAL
     notes = ("Model is visible but archived docs did not obtain a successful sample; do not use as default.",)
-    runtime = PresetRuntimeConfig(timeout_seconds=240.0, retry_count=1)
+    runtime = PresetRuntimeConfig(timeout_seconds=250.0, retry_count=1)

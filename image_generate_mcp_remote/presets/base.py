@@ -301,7 +301,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         path = GPT_IMAGE_EDITS_PATH if mode is PresetModeSupport.EDIT else GPT_IMAGE_GENERATIONS_PATH
         endpoint = self.endpoint_for_path(path)
         last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
-        total_attempts = self.resolve().config.runtime.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
+        total_attempts = self.resolve().config.runtime.retry_count 
         for attempt in range(1, total_attempts + 1):
             try:
                 logger.info(

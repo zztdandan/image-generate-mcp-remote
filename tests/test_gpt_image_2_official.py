@@ -444,3 +444,13 @@ def test_laozhang_vip_preset_uses_240s_timeout_and_single_retry():
 
     assert resolved.config.runtime.timeout_seconds == 240
     assert resolved.config.runtime.retry_count == 1
+
+
+def test_right_codes_presets_use_180s_timeout_and_single_retry():
+    gpt_resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "right_codes_gpt_image_2").resolve()
+    vip_resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "right_codes_gpt_image_2_vip").resolve()
+
+    assert gpt_resolved.config.runtime.timeout_seconds == 180
+    assert gpt_resolved.config.runtime.retry_count == 1
+    assert vip_resolved.config.runtime.timeout_seconds == 180
+    assert vip_resolved.config.runtime.retry_count == 1

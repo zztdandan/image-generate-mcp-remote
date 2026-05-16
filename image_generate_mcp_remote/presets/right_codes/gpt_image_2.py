@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
 from ...contracts.image_size import ImageAspectRatio, ImageSizeTier
-from ...contracts.presets import PresetProvider, UnsupportedSizePreset
+from ...contracts.presets import PresetProvider, PresetRuntimeConfig, UnsupportedSizePreset
 
 
 class RightCodesGptImage2Preset(BaseGptImage2Preset):
@@ -18,6 +18,7 @@ class RightCodesGptImage2Preset(BaseGptImage2Preset):
     preset_id = "right_codes_gpt_image_2"
     provider = PresetProvider.RIGHT_CODES
     base_url = "https://www.right.codes/draw/v1"
+    runtime = PresetRuntimeConfig(timeout_seconds=180.0, retry_count=1)
     unsupported_sizes: tuple[UnsupportedSizePreset, ...] = tuple(
         UnsupportedSizePreset(image_size=image_size, aspect_ratio=aspect_ratio)
         for image_size in (ImageSizeTier.SIZE_2K, ImageSizeTier.SIZE_4K)

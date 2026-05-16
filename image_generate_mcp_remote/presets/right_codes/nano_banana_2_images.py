@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetProvider
+from ...contracts.presets import PresetProvider, PresetRuntimeConfig
 
 
 class RightCodesNanoBanana2ImagesPreset(BaseGptImage2Preset):
@@ -14,8 +14,9 @@ class RightCodesNanoBanana2ImagesPreset(BaseGptImage2Preset):
         - 作为模块间传递对象，保证类型与字段命名一致
     """
 
-    preset_id = "right_codes_nano_banana_2_images"
+    preset_id = "right_codes_nano_with_image_api_images"
     provider = PresetProvider.RIGHT_CODES
     base_url = "https://www.right.codes/draw/v1"
     model = "nano-banana-2"
+    runtime = PresetRuntimeConfig(timeout_seconds=180.0, retry_count=1)
     notes = ("Uses OpenAI Images style endpoint despite the nano-banana-2 model name.",)
