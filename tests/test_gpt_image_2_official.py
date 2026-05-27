@@ -9,7 +9,9 @@ from image_generate_mcp_remote.contracts.presets import PresetToolName
 from image_generate_mcp_remote.config import get_settings
 from image_generate_mcp_remote.errors import ValidationError
 from image_generate_mcp_remote.models.common import ImageToolMode, ToolVersion
+from image_generate_mcp_remote.presets.base import GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX
 from image_generate_mcp_remote.presets.loader import resolve_preset_for_tool
+from image_generate_mcp_remote.presets.openai.gpt_image_2 import OpenAIGptImage2Preset
 from image_generate_mcp_remote.tools.gpt_image_2_official import (
     GptImageBackground,
     GptImageCount,
@@ -77,7 +79,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
     assert captured["url"] == "https://api.openai.com/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer secret-key"}
     assert captured["json"] == {
-        "prompt": "draw a cat",
+        "prompt": f"draw a cat\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}",
         "model": "gpt-image-2",
         "size": "1280x1280",
         "quality": "high",
@@ -136,7 +138,8 @@ def test_gpt_generate_uses_active_laozhang_preset_dispatch(monkeypatch, tmp_path
             "draw a mug\n\n"
             "Provider parameter fallback requirements:\n"
             "- Target image size: 1280x720.\n"
-            "- Target image quality: high."
+            "- Target image quality: high.\n"
+            f"{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}"
         ),
         "model": "gpt-image-2",
         "output_format": "png",
@@ -177,6 +180,7 @@ def test_gpt_generate_supports_per_call_preset_and_api_key_override(monkeypatch,
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
     assert captured["timeout"] == 180
     assert "Target image size: 1280x720." in captured["json"]["prompt"]
+    assert captured["json"]["prompt"].endswith(GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX)
     assert result.file_path.endswith("override-per-call.png")
 
 
@@ -277,11 +281,33 @@ def test_gpt_generate_vip_preset_sends_minimal_payload(monkeypatch, tmp_path: Pa
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
     assert captured["timeout"] == 240
     assert captured["json"] == {
-        "prompt": "draw a lantern",
+        "prompt": f"draw a lantern\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}",
         "model": "gpt-image-2-vip",
         "size": "1280x720",
     }
     assert result.file_path.endswith("vip-minimal.png")
+
+
+def test_gpt_generate_allows_preset_to_disable_fragment_reduction_suffix(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
+    monkeypatch.setattr(OpenAIGptImage2Preset, "append_fragment_reduction_prompt", False)
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["json"] = json
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse({"created": 123, "data": [{"b64_json": image_payload}]})
+
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
+
+    gpt_image_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="draw a cat",
+        save_path=str(tmp_path / "generated-no-suffix.png"),
+    )
+
+    assert captured["json"]["prompt"] == "draw a cat"
 
 
 def test_gpt_generate_vip_preset_rejects_4k_requests(tmp_path: Path):
@@ -376,7 +402,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     )
 
     assert captured["url"] == "https://api.openai.com/v1/images/edits"
-    assert captured["data"]["prompt"] == "edit this"
+    assert captured["data"]["prompt"] == f"edit this\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}"
     assert captured["data"]["output_format"] == "webp"
     assert captured["files"][0][0] == "image[]"
     assert captured["files"][0][1][0] == "input.png"
@@ -452,5 +478,5 @@ def test_right_codes_presets_use_180s_timeout_and_single_retry():
 
     assert gpt_resolved.config.runtime.timeout_seconds == 180
     assert gpt_resolved.config.runtime.retry_count == 1
-    assert vip_resolved.config.runtime.timeout_seconds == 180
+    assert vip_resolved.config.runtime.timeout_seconds == 250
     assert vip_resolved.config.runtime.retry_count == 1

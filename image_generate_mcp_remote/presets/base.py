@@ -44,6 +44,17 @@ GPT_IMAGE_RESPONSE_EXCERPT_LIMIT = 400
 NANO_BANANA_RESPONSE_EXCERPT_LIMIT = 400
 RETRY_TO_TOTAL_ATTEMPTS_OFFSET = 1
 logger = logging.getLogger(__name__)
+GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX_LINES: tuple[str, ...] = (
+    "clean smooth texture",
+    "no grain",
+    "no noise",
+    "no tiling artifacts",
+    "no dirty texture",
+    "natural skin texture",
+    "high clarity",
+    "clean lighting",
+)
+GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX = "\n".join(GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX_LINES)
 
 
 class BaseImageToolPreset:
@@ -64,6 +75,7 @@ class BaseImageToolPreset:
     stability: PresetStability = PresetStability.STABLE
     notes: tuple[str, ...] = ()
     unsupported_sizes: tuple[UnsupportedSizePreset, ...] = ()
+    append_fragment_reduction_prompt: bool = False
     dispatch: PresetDispatchPolicy = PresetDispatchPolicy(
         size=PresetFieldDispatchMode.SEND,
         quality=PresetFieldDispatchMode.SEND,
@@ -95,6 +107,7 @@ class BaseImageToolPreset:
             dispatch=self.dispatch,
             runtime=self.runtime,
             unsupported_sizes=list(self.unsupported_sizes),
+            append_fragment_reduction_prompt=self.append_fragment_reduction_prompt,
             notes=list(self.notes),
             stability=self.stability,
         )
@@ -221,6 +234,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
     base_url = "https://api.openai.com/v1"
     model = "gpt-image-2"
     modes = (PresetModeSupport.GENERATE, PresetModeSupport.EDIT)
+    append_fragment_reduction_prompt = True
 
     def execute_gpt_image_2(self, request: GptImage2ExecutionRequest, api_key: str) -> ImageToolResult:
         """执行 execute_gpt_image_2，用于 preset 契约定义 场景下的当前步骤处理。
@@ -262,6 +276,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         resolved = self.resolve()
         mode = PresetModeSupport(request.mode.value)
         prompt = self.prompt_with_dispatch_fallback(request.prompt, request.image_size, request.aspect_ratio, request.quality.value)
+        prompt = self.append_fragment_reduction_prompt_suffix(prompt, resolved.config.append_fragment_reduction_prompt)
         payload: dict[str, str | int] = {"prompt": prompt, "model": resolved.config.model}
         if mode is PresetModeSupport.GENERATE and isinstance(request, GptImage2GenerateExecutionRequest):
             payload["n"] = int(request.n)
@@ -288,6 +303,20 @@ class BaseGptImage2Preset(BaseImageToolPreset):
                 files.append(("mask", (resolved_mask.filename, resolved_mask.data, resolved_mask.mime_type)))
         return GptImage2PreparedRequest(payload=payload, files=files)
 
+    def append_fragment_reduction_prompt_suffix(self, prompt: str, is_enabled: bool) -> str:
+        """执行 append_fragment_reduction_prompt_suffix，用于 preset 契约定义 场景下的当前步骤处理。
+
+        处理流程：
+            - 步骤 1：根据 preset 开关判断是否追加减小破碎感提示
+            - 步骤 2：返回最终 prompt 文本供上游请求复用
+        """
+
+        if not is_enabled:
+            return prompt
+        if not prompt:
+            return GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX
+        return f"{prompt}\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}"
+
     def send_gpt_image_2_request(self, request: GptImage2ExecutionRequest, prepared: GptImage2PreparedRequest, api_key: str) -> dict[str, object]:
         """执行 send_gpt_image_2_request，用于 preset 契约定义 场景下的当前步骤处理。
         
@@ -301,7 +330,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         path = GPT_IMAGE_EDITS_PATH if mode is PresetModeSupport.EDIT else GPT_IMAGE_GENERATIONS_PATH
         endpoint = self.endpoint_for_path(path)
         last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
-        total_attempts = self.resolve().config.runtime.retry_count 
+        total_attempts = self.resolve().config.runtime.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
         for attempt in range(1, total_attempts + 1):
             try:
                 logger.info(

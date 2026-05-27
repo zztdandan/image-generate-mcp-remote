@@ -172,6 +172,7 @@ class ImageToolPresetConfig(BaseModel):
     dispatch: PresetDispatchPolicy
     runtime: PresetRuntimeConfig
     unsupported_sizes: list[UnsupportedSizePreset]
+    append_fragment_reduction_prompt: bool = False
     notes: list[str]
     stability: PresetStability = PresetStability.STABLE
 
