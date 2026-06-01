@@ -19,7 +19,7 @@
 
 Provider、model、base_url、timeout、retry 及字段派发行为默认由启动期 preset 决定。
 
-这次 0.9.9 + 版本 把“不同供应商 / 不同兼容站点的差异”正式上收为一层稳定的预设体系：
+这次 1.0.0 版本 把“不同供应商 / 不同兼容站点的差异”正式上收为一层稳定的预设体系：
 
 - 正式工具对外仍保持稳定的 MCP tool schema，不因为切换供应商就改参数结构
 - 站点差异不再散落在 tool 逻辑或零散环境变量里，而是收敛到内置 preset class
@@ -61,14 +61,14 @@ Provider、model、base_url、timeout、retry 及字段派发行为默认由启�
 - 推荐安装到工具目录：`uv tool install image-generate-mcp-remote`
 - 推荐阅读真实部署与 MCP 配置导览：`./SYSTEMD_DEPLOYMENT_GUIDE.md`
 
-例如，安装 `v0.9.9` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
+例如，安装 `v1.0.0` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
 
 ```bash
 # 安装为全局工具
 uv tool install image-generate-mcp-remote
 
 # 指定版本
-uv tool install --refresh image-generate-mcp-remote==0.9.9
+uv tool install --refresh image-generate-mcp-remote==1.0.0
 ```
 
 ## 从源码安装与启动
