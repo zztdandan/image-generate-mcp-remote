@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .base import BaseImageToolPreset
-from .apiyi import ApiYiGptImage2Preset
+from .apiyi import ApiYiGptImage2Preset, ApiYiNanoBanana2Preset
 from .copperai import CopperAIGptImage2Preset
 from .google import GoogleNanoBananaPreset
 from .laozhang import (
@@ -20,6 +20,7 @@ PresetClass = type[BaseImageToolPreset]
 PRESET_REGISTRY: dict[str, PresetClass] = {
     OpenAIGptImage2Preset.preset_id: OpenAIGptImage2Preset,
     ApiYiGptImage2Preset.preset_id: ApiYiGptImage2Preset,
+    ApiYiNanoBanana2Preset.preset_id: ApiYiNanoBanana2Preset,
     LaoZhangGptImage2DefaultPreset.preset_id: LaoZhangGptImage2DefaultPreset,
     LaoZhangGptImage2SoraOfficialPreset.preset_id: LaoZhangGptImage2SoraOfficialPreset,
     LaoZhangGptImage2EnterprisePreset.preset_id: LaoZhangGptImage2EnterprisePreset,

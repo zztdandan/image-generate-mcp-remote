@@ -43,7 +43,7 @@ Provider、model、base_url、timeout、retry 及字段派发行为默认由启�
 - 不传按次覆盖参数时，仍回退到环境变量配置的 preset 与 API Key
 
 - 通过local的或服务式配置环境变量 `IMG_GEN_GPT_IMAGE_2_OFFICIAL_PRESET` 选择 `gpt_image_2_official` 的 active preset，例如 `openai_gpt_image_2`、`right_codes_gpt_image_2`、`apiyi_gpt_image_2`、`laozhang_gpt_image_2_default`、`laozhang_gpt_image_2_sora_official`、`laozhang_gpt_image_2_enterprise`、`laozhang_gpt_image_2_vip`
-- 通过 `IMG_GEN_NANO_BANANA_2_OFFICIAL_PRESET` 选择 `nano_banana_2_official` 的 active preset，默认 `google_nano_banana`
+- 通过 `IMG_GEN_NANO_BANANA_2_OFFICIAL_PRESET` 选择 `nano_banana_2_official` 的 active preset，例如 `google_nano_banana`、`apiyi_nano_banana_2`
 - 不配置时回退到内置默认 preset（`openai_gpt_image_2` / `google_nano_banana`）
 
 典型接口：

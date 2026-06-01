@@ -168,6 +168,46 @@ def test_nano_generate_supports_per_call_preset_and_api_key_override(monkeypatch
     assert result.file_path.endswith("override-call.png")
 
 
+def test_nano_generate_supports_apiyi_preset_override(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "env-secret-key")
+    captured: dict[str, object] = {}
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
+        return DummyResponse(
+            {
+                "responseId": "resp-apiyi-override",
+                "candidates": [{"content": {"parts": [{"inlineData": {"mimeType": "image/png", "data": image_payload}}]}}],
+            }
+        )
+
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
+
+    result = nano_banana_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="make a mug",
+        save_path=str(tmp_path / "apiyi-override-call.png"),
+        preset="apiyi_nano_banana_2",
+        api_key="request-secret-key",
+        aspect_ratio=ImageAspectRatio.WIDE_16_9,
+        image_size=ImageSizeTier.SIZE_2K,
+    )
+
+    assert captured["url"] == "https://api.apiyi.com/v1beta/models/gemini-3.1-flash-image-preview:generateContent"
+    assert captured["headers"] == {
+        "Authorization": "Bearer request-secret-key",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "2K"}
+    assert captured["timeout"] == 300
+    assert result.file_path.endswith("apiyi-override-call.png")
+
+
 def test_nano_generate_rejects_preset_override_without_api_key(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "env-secret-key")
 
