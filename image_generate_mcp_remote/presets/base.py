@@ -36,8 +36,8 @@ from ..models.common import ActualSizeVerificationResult, ImageToolMode, ImageTo
 from .input_images import resolve_input_image
 from .models import GptImage2EditExecutionRequest, GptImage2ExecutionRequest, GptImage2GenerateExecutionRequest, GptImage2PreparedRequest, NanoBananaEditExecutionRequest, NanoBananaExecutionRequest, NanoBananaPreparedRequest, ResolvedImageToolPreset
 
-PRESET_DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 180.0
-PRESET_DEFAULT_TOOL_RETRY_COUNT = 3
+PRESET_DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 200.0
+PRESET_DEFAULT_TOOL_RETRY_COUNT = 1
 GPT_IMAGE_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_EDITS_PATH = "/images/edits"
 GPT_IMAGE_RESPONSE_EXCERPT_LIMIT = 400

@@ -103,7 +103,7 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
     assert result.actual_size_verification.actual_width == 1
     assert result.actual_size_verification.actual_height == 1
     assert result.actual_size_verification.is_consistent is False
-    assert captured["timeout"] == 180
+    assert captured["timeout"] == 200
 
 
 def test_gpt_generate_uses_active_laozhang_preset_dispatch(monkeypatch, tmp_path: Path):
@@ -178,7 +178,7 @@ def test_gpt_generate_supports_per_call_preset_and_api_key_override(monkeypatch,
 
     assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
-    assert captured["timeout"] == 180
+    assert captured["timeout"] == 120
     assert "Target image size: 1280x720." in captured["json"]["prompt"]
     assert captured["json"]["prompt"].endswith(GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX)
     assert result.file_path.endswith("override-per-call.png")
@@ -242,7 +242,7 @@ def test_gpt_generate_downloads_url_response(monkeypatch, tmp_path: Path):
 
     assert captured["post_url"] == "https://api.openai.com/v1/images/generations"
     assert captured["download_url"] == "http://cdn.example.com/generated.png"
-    assert captured["download_timeout"] == 180
+    assert captured["download_timeout"] == 200
     assert captured["follow_redirects"] is True
     assert result.file_path.endswith("from-url.png")
     assert result.provider_response_excerpt == {
@@ -279,7 +279,7 @@ def test_gpt_generate_vip_preset_sends_minimal_payload(monkeypatch, tmp_path: Pa
 
     assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
-    assert captured["timeout"] == 240
+    assert captured["timeout"] == 150
     assert captured["json"] == {
         "prompt": f"draw a lantern\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}",
         "model": "gpt-image-2-vip",
@@ -407,7 +407,7 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     assert captured["files"][0][0] == "image[]"
     assert captured["files"][0][1][0] == "input.png"
     assert captured["files"][1][0] == "mask"
-    assert captured["timeout"] == 180
+    assert captured["timeout"] == 200
     assert result.mime_type == "image/webp"
     assert result.file_path.endswith("edited.webp")
     assert result.width == 1
@@ -447,7 +447,7 @@ def test_gpt_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
 
     def flaky_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
         calls["post"] += 1
-        if calls["post"] < 4:
+        if calls["post"] < 2:
             raise httpx.RequestError("flaky network")
         image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse({"created": 123, "data": [{"b64_json": image_payload}]})
@@ -461,22 +461,22 @@ def test_gpt_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
         save_path=str(tmp_path / "retry.png"),
     )
 
-    assert calls["post"] == 4
+    assert calls["post"] == 2
     assert result.file_path.endswith("retry.png")
 
 
-def test_laozhang_vip_preset_uses_240s_timeout_and_single_retry():
+def test_laozhang_vip_preset_uses_150s_timeout_and_single_retry():
     resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "laozhang_gpt_image_2_vip").resolve()
 
-    assert resolved.config.runtime.timeout_seconds == 240
+    assert resolved.config.runtime.timeout_seconds == 150
     assert resolved.config.runtime.retry_count == 1
 
 
-def test_right_codes_presets_use_180s_timeout_and_single_retry():
+def test_right_codes_presets_use_size_based_timeout_and_single_retry():
     gpt_resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "right_codes_gpt_image_2").resolve()
     vip_resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "right_codes_gpt_image_2_vip").resolve()
 
-    assert gpt_resolved.config.runtime.timeout_seconds == 180
+    assert gpt_resolved.config.runtime.timeout_seconds == 120
     assert gpt_resolved.config.runtime.retry_count == 1
-    assert vip_resolved.config.runtime.timeout_seconds == 250
+    assert vip_resolved.config.runtime.timeout_seconds == 200
     assert vip_resolved.config.runtime.retry_count == 1

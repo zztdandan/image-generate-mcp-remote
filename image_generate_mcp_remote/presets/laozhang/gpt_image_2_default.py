@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
 from ...contracts.image_size import ImageAspectRatio, ImageSizeTier
-from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, UnsupportedSizePreset
+from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, PresetRuntimeConfig, UnsupportedSizePreset
 
 
 class LaoZhangGptImage2DefaultPreset(BaseGptImage2Preset):
@@ -25,6 +25,7 @@ class LaoZhangGptImage2DefaultPreset(BaseGptImage2Preset):
         background=PresetFieldDispatchMode.SEND,
         moderation=PresetFieldDispatchMode.SEND,
     )
+    runtime = PresetRuntimeConfig(timeout_seconds=120.0, retry_count=1)
     unsupported_sizes: tuple[UnsupportedSizePreset, ...] = tuple(
         UnsupportedSizePreset(image_size=image_size, aspect_ratio=aspect_ratio)
         for image_size in (ImageSizeTier.SIZE_2K, ImageSizeTier.SIZE_4K)

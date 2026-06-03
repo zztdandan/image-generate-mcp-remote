@@ -4,8 +4,8 @@
 
 > 本子项目运行时复用工作区根目录 `.venv`。在本目录执行 `uv` 命令时，会通过工作区环境注入使用统一虚拟环境。
 
-> 注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。
-> 文档推荐将 MCP 客户端 `timeout` 显式设置为 `500000` 毫秒（500 秒）；这是常规重试场景下的推荐值，同时请知悉极端情况下最长仍可能到 12 分钟。
+> 注意，timeout为关键参数；当前 preset 统一只有 `1` 次默认机会 + `1` 次重试机会，且按支持尺寸档位分配上游 HTTP 超时：仅 `1K` 为 `120s`、支持 `2K` 为 `150s`、支持 `4K` 为 `200s`。如果不设置客户端超时，默认 `30` 秒通常一定生成不了图片。
+> 文档仍推荐将 MCP 客户端 `timeout` 显式设置为 `500000` 毫秒（500 秒）；它可以覆盖当前 `4K` preset 最长约 `400` 秒的两次尝试预算，并为网络抖动留出余量。
 
 ## 项目能力
 
@@ -19,7 +19,7 @@
 
 Provider、model、base_url、timeout、retry 及字段派发行为默认由启动期 preset 决定。
 
-这次 1.0.0 版本 把“不同供应商 / 不同兼容站点的差异”正式上收为一层稳定的预设体系：
+这次 `1.0.0-beta1` 版本把“不同供应商 / 不同兼容站点的差异”正式上收为一层稳定的预设体系：
 
 - 正式工具对外仍保持稳定的 MCP tool schema，不因为切换供应商就改参数结构
 - 站点差异不再散落在 tool 逻辑或零散环境变量里，而是收敛到内置 preset class
@@ -61,14 +61,14 @@ Provider、model、base_url、timeout、retry 及字段派发行为默认由启�
 - 推荐安装到工具目录：`uv tool install image-generate-mcp-remote`
 - 推荐阅读真实部署与 MCP 配置导览：`./SYSTEMD_DEPLOYMENT_GUIDE.md`
 
-例如，安装 `v1.0.0` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
+例如，安装 `v1.0.0-beta1` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
 
 ```bash
 # 安装为全局工具
 uv tool install image-generate-mcp-remote
 
 # 指定版本
-uv tool install --refresh image-generate-mcp-remote==1.0.0
+uv tool install --refresh image-generate-mcp-remote==1.0.0-beta1
 ```
 
 ## 从源码安装与启动
@@ -221,7 +221,7 @@ uv run image-generate-mcp-remote --transport streamable-http --host 127.0.0.1 --
 }
 ```
 
-上面的 `timeout` 不要省略。注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。文档示例推荐值为 `500000` 毫秒（500 秒），用于覆盖常规重试场景。
+上面的 `timeout` 不要省略。注意，timeout为关键参数；当前 preset 统一只有 `1` 次默认机会 + `1` 次重试机会，且按支持尺寸档位分配上游 HTTP 超时：仅 `1K` 为 `120s`、支持 `2K` 为 `150s`、支持 `4K` 为 `200s`。文档示例推荐值为 `500000` 毫秒（500 秒），用于覆盖当前 `4K` preset 最长约 `400` 秒的两次尝试预算。
 
 ### 方式四：SSE 远程接入
 
@@ -241,7 +241,7 @@ uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
 - `http://127.0.0.1:3001/sse`
 - `http://127.0.0.1:3001/messages/`
 
-如果客户端还支持单独配置 MCP tool-call 超时，也应显式设置 `timeout`；文档推荐值为 `500000` 毫秒（500 秒），但在渠道极不稳定时，单张图最长仍可能接近 `12` 分钟。
+如果客户端还支持单独配置 MCP tool-call 超时，也应显式设置 `timeout`；文档推荐值为 `500000` 毫秒（500 秒），用于覆盖当前 `4K` preset 两次尝试的最长预算，并为网络抖动留出余量。
 
 ## 工具列表
 

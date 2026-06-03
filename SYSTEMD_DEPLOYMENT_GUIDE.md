@@ -29,16 +29,16 @@
 
 - `<deploy-root>` 可以是 `~/mcp/image-generate-mcp`
 
-如果你希望固定到某个已发布版本，例如 `1.0.0`，推荐在部署目录中显式执行：
+如果你希望固定到某个已发布版本，例如 `1.0.0-beta1`，推荐在部署目录中显式执行：
 
 ```bash
-uv tool install --refresh image-generate-mcp-remote==1.0.0
+uv tool install --refresh image-generate-mcp-remote==1.0.0-beta1
 ```
 
 或者临时验证某个版本：
 
 ```bash
-uvx --from image-generate-mcp-remote==1.0.0 image-generate-mcp-remote --help
+uvx --from image-generate-mcp-remote==1.0.0-beta1 image-generate-mcp-remote --help
 ```
 
 ## 3. 当前部署模式对应的 unit 示例
@@ -172,8 +172,8 @@ journalctl --user -u image-generate-mcp.service -n 100 --no-pager
   }
 }
 ```
-注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。
-文档推荐值为 `500000` 毫秒（500 秒），符合常规重试时间；同时可在说明中补充极端情况下最长可能达到 12 分钟。
+注意，timeout为关键参数；当前 preset 统一只有 `1` 次默认机会 + `1` 次重试机会，且按支持尺寸档位分配上游 HTTP 超时：仅 `1K` 为 `120s`、支持 `2K` 为 `150s`、支持 `4K` 为 `200s`。如果不设置超时，默认 `30` 秒通常一定生成不了图片。
+文档推荐值为 `500000` 毫秒（500 秒），可覆盖当前 `4K` preset 最长约 `400` 秒的两次尝试预算，并为网络抖动留出余量。
 如果服务对外监听并通过其他域名或 IP 暴露，把上面的 `url` 改成实际可访问地址即可。
 
 ### 8.2 本地 `stdio`
@@ -205,8 +205,8 @@ journalctl --user -u image-generate-mcp.service -n 100 --no-pager
 ```
 
 注意：只有 `stdio` 这种客户端拉起进程的模式，`env` 才会直接生效到服务进程。
-注意，timeout为关键参数，生成图片一般需要3分钟/张，mcp工具默认重试3次，故最多可能12分钟出一张图（渠道不稳定情况下），如果不设置超时，默认为30秒，一定生成不了图片。
-生图调用耗时较长，正式工具的上游 HTTP 超时与重试由 active preset 决定；如果客户端支持 MCP tool-call 超时配置，文档推荐显式配置为 `500000` 毫秒（500 秒），避免默认 `30` 秒过早超时；同时也应知道渠道极不稳定时最长可能接近 `12` 分钟。
+注意，timeout为关键参数；当前 preset 统一只有 `1` 次默认机会 + `1` 次重试机会，且按支持尺寸档位分配上游 HTTP 超时：仅 `1K` 为 `120s`、支持 `2K` 为 `150s`、支持 `4K` 为 `200s`。如果不设置超时，默认 `30` 秒通常一定生成不了图片。
+生图调用耗时较长，正式工具的上游 HTTP 超时与重试由 active preset 决定；如果客户端支持 MCP tool-call 超时配置，文档推荐显式配置为 `500000` 毫秒（500 秒），避免默认 `30` 秒过早超时，并覆盖当前 `4K` preset 最长约 `400` 秒的两次尝试预算。
 
 ## 9. 常见问题
 

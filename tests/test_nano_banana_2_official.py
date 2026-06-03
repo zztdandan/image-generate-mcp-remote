@@ -80,7 +80,7 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert captured["json"]["contents"] == [{"parts": [{"text": "make a fox"}]}]
     assert captured["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "1:1", "imageSize": "1K"}
-    assert captured["timeout"] == 180
+    assert captured["timeout"] == 200
     assert Path(result.file_path).exists()
     assert result.file_path.endswith("nano.png")
     assert result.elapsed_seconds >= 0
@@ -164,7 +164,7 @@ def test_nano_generate_supports_per_call_preset_and_api_key_override(monkeypatch
         "Content-Type": "application/json",
         "x-goog-api-key": "request-secret-key",
     }
-    assert captured["timeout"] == 180
+    assert captured["timeout"] == 200
     assert result.file_path.endswith("override-call.png")
 
 
@@ -204,7 +204,7 @@ def test_nano_generate_supports_apiyi_preset_override(monkeypatch, tmp_path: Pat
         "Content-Type": "application/json",
     }
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "2K"}
-    assert captured["timeout"] == 300
+    assert captured["timeout"] == 200
     assert result.file_path.endswith("apiyi-override-call.png")
 
 
@@ -291,7 +291,7 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
     assert parts[0] == {"text": "add a hat"}
     assert "inlineData" in parts[1]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "21:9", "imageSize": "4K"}
-    assert captured["timeout"] == 180
+    assert captured["timeout"] == 200
     assert result.mime_type == "image/jpeg"
     assert result.text_output == "done"
     assert result.file_path.endswith("nano-edit.jpg")
@@ -350,7 +350,7 @@ def test_nano_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
 
     def flaky_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
         calls["post"] += 1
-        if calls["post"] < 4:
+        if calls["post"] < 2:
             raise httpx.RequestError("flaky network")
         image_payload = base64.b64encode(PNG_1X1_BYTES).decode("utf-8")
         return DummyResponse(
@@ -370,5 +370,5 @@ def test_nano_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
         response_modalities=[ResponseModality.IMAGE],
     )
 
-    assert calls["post"] == 4
+    assert calls["post"] == 2
     assert result.file_path.endswith("nano-retry.png")

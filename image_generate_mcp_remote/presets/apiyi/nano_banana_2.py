@@ -22,7 +22,7 @@ class ApiYiNanoBanana2Preset(BaseNanoBananaPreset):
     provider = PresetProvider.APIYI
     base_url = "https://api.apiyi.com"
     model = "gemini-3.1-flash-image-preview"
-    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=3)
+    runtime = PresetRuntimeConfig(timeout_seconds=200.0, retry_count=1)
     notes = (
         "API易 Nano Banana 2 uses the Gemini generateContent compatible endpoint.",
         "This preset sends Authorization only and does not require Google-specific x-goog-api-key headers.",
