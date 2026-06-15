@@ -2,7 +2,7 @@
 
 一个基于 UV + Python 的远程 MCP 图片生成服务，统一封装 OpenAI Images 兼容接口与 Gemini `generateContent` 生图接口。
 
-> 本子项目运行时复用工作区根目录 `.venv`。在本目录执行 `uv` 命令时，会通过工作区环境注入使用统一虚拟环境。
+> 本子项目在源码仓开发时复用工作区根目录 `.venv`。这只适用于开发与测试；正式 systemd 部署推荐使用 wheel 安装到独立部署目录 `.venv`，不要使用源码 editable 安装作为生产形态。
 
 > 注意，timeout为关键参数；当前 preset 统一只有 `1` 次默认机会 + `1` 次重试机会，且按支持尺寸档位分配上游 HTTP 超时：仅 `1K` 为 `120s`、支持 `2K` 为 `150s`、支持 `4K` 为 `200s`。如果不设置客户端超时，默认 `30` 秒通常一定生成不了图片。
 > 文档仍推荐将 MCP 客户端 `timeout` 显式设置为 `500000` 毫秒（500 秒）；它可以覆盖当前 `4K` preset 最长约 `400` 秒的两次尝试预算，并为网络抖动留出余量。
@@ -51,14 +51,15 @@ Provider、model、base_url、timeout、retry 及字段派发行为默认由启�
   - `POST /v1/images/edits`
   - `POST /v1beta/models/{model}:generateContent`
 
-## 通过 uv / PyPI 安装使用
+## 通过 uv / PyPI / wheel 安装使用
 
 `uv` 本身没有单独的“官方包仓库”，常规做法是把包发布到 `PyPI`，然后让用户通过 `uv` 直接下载运行。
 
 当前发布链路会把 GitHub Release 对应版本自动发布到 `PyPI`。
 
 - PyPI 项目名：`image-generate-mcp-remote`
-- 推荐安装到工具目录：`uv tool install image-generate-mcp-remote`
+- 本地开发可用：`uv tool install image-generate-mcp-remote`
+- 正式部署更推荐：构建 `.whl` 后安装到部署目录自己的 `.venv`
 - 推荐阅读真实部署与 MCP 配置导览：`./SYSTEMD_DEPLOYMENT_GUIDE.md`
 
 例如，安装 `v1.0.0-beta1` 后可用于远端 MCP 服务部署或供 MCP 客户端以 `stdio` 模式拉起：
@@ -71,7 +72,20 @@ uv tool install image-generate-mcp-remote
 uv tool install --refresh image-generate-mcp-remote==1.0.0-beta1
 ```
 
-## 从源码安装与启动
+如果你要做正式的 `systemd --user` 远端部署，推荐流程不是直接把源码目录长期放在线上运行，而是：
+
+```bash
+uv build
+cp dist/image_generate_mcp_remote-1.0.0b1-py3-none-any.whl <deploy-root>/wheels/
+uv venv <deploy-root>/.venv
+uv pip install --python <deploy-root>/.venv/bin/python <deploy-root>/wheels/image_generate_mcp_remote-1.0.0b1-py3-none-any.whl
+```
+
+这样部署后，服务运行代码来自 wheel 安装结果，而不是源码 editable 注入。
+
+## 从源码安装与启动（开发模式）
+
+这一节只用于本地开发、测试、调试，不是推荐的正式部署方式。
 
 ### 1. 安装依赖
 
@@ -102,6 +116,13 @@ uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
 ## 当前实际部署（systemd --user）
 
 本项目当前真正使用中的远端 MCP 服务，不是 `stdio` 直连，而是 `systemd --user` 托管的 `streamable-http` 服务。
+
+推荐的正式部署形态是：
+
+- 部署目录保存 `.env`、`.venv`、`storage/`、`wheels/`
+- `.venv` 中安装的是已构建好的 `.whl`
+- systemd 只启动部署目录 `.venv/bin/image-generate-mcp-remote`
+- 不依赖源码树是否存在或是否被改动
 
 - 服务名：`image-generate-mcp.service`
 - unit 文件位置模式：`~/.config/systemd/user/image-generate-mcp.service`

@@ -17,7 +17,7 @@ load_dotenv()
 GPT_IMAGE_2_OFFICIAL_NAME = "gpt_image_2_official"
 NANO_BANANA_2_OFFICIAL_NAME = "nano_banana_2_official"
 SERVICE_NAME = "image-generate-mcp-remote"
-SERVICE_VERSION = "1.0.0"
+SERVICE_VERSION = "1.0.0-beta1"
 
 DEFAULT_OUTPUT_DIR = Path("storage/images")
 DEFAULT_LOG_LEVEL = "INFO"

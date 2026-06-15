@@ -11,6 +11,7 @@ from .laozhang import (
     LaoZhangGptImage2EnterprisePreset,
     LaoZhangGptImage2SoraOfficialPreset,
     LaoZhangGptImage2VipPreset,
+    LaoZhangNanoBananaProPreset,
 )
 from .openai import OpenAIGptImage2Preset
 from .right_codes import RightCodesGptImage2Preset, RightCodesGptImage2VipPreset, RightCodesNanoBanana2ImagesPreset
@@ -25,6 +26,7 @@ PRESET_REGISTRY: dict[str, PresetClass] = {
     LaoZhangGptImage2SoraOfficialPreset.preset_id: LaoZhangGptImage2SoraOfficialPreset,
     LaoZhangGptImage2EnterprisePreset.preset_id: LaoZhangGptImage2EnterprisePreset,
     LaoZhangGptImage2VipPreset.preset_id: LaoZhangGptImage2VipPreset,
+    LaoZhangNanoBananaProPreset.preset_id: LaoZhangNanoBananaProPreset,
     RightCodesGptImage2Preset.preset_id: RightCodesGptImage2Preset,
     RightCodesGptImage2VipPreset.preset_id: RightCodesGptImage2VipPreset,
     RightCodesNanoBanana2ImagesPreset.preset_id: RightCodesNanoBanana2ImagesPreset,
