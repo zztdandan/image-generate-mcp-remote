@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
+from ...contracts.presets import PresetRuntimeConfig
 
 
 class OpenAIGptImage2Preset(BaseGptImage2Preset):
@@ -15,3 +16,4 @@ class OpenAIGptImage2Preset(BaseGptImage2Preset):
 
     preset_id = "openai_gpt_image_2"
     notes = ("Default OpenAI Images compatible preset.",)
+    runtime = PresetRuntimeConfig(timeout_seconds=120.0, retry_count=0)

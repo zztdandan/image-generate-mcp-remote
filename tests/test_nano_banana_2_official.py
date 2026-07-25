@@ -7,7 +7,7 @@ import pytest
 from image_generate_mcp_remote.contracts.image_size import ImageAspectRatio, ImageSizeTier
 from image_generate_mcp_remote.config import get_settings
 from image_generate_mcp_remote.errors import ValidationError
-from image_generate_mcp_remote.models.common import ImageToolMode, ToolVersion
+from image_generate_mcp_remote.models.common import ImageRawResultType, ImageToolBase64AsyncResult, ImageToolMode, ToolVersion
 from image_generate_mcp_remote.tools.nano_banana_2_official import (
     ResponseModality,
     nano_banana_2_official_edit,
@@ -80,20 +80,15 @@ def test_nano_generate_builds_text_only_payload(monkeypatch, tmp_path: Path):
     assert captured["json"]["contents"] == [{"parts": [{"text": "make a fox"}]}]
     assert captured["json"]["generationConfig"]["responseModalities"] == ["IMAGE"]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "1:1", "imageSize": "1K"}
-    assert captured["timeout"] == 200
-    assert Path(result.file_path).exists()
-    assert result.file_path.endswith("nano.png")
+    assert captured["timeout"] == 300
+    assert isinstance(result, ImageToolBase64AsyncResult)
+    assert Path(result.save_path).exists()
+    assert result.save_path.endswith("nano.png")
+    assert result.request_completed is True
+    assert result.raw_result_type is ImageRawResultType.BASE64
+    assert result.response_format == "inlineData/base64 (image/png)"
+    assert result.estimated_file_size_bytes == len(PNG_1X1_BYTES)
     assert result.elapsed_seconds >= 0
-    assert result.width == 1
-    assert result.height == 1
-    assert result.actual_size_verification is not None
-    assert result.actual_size_verification.requested_image_size == ImageSizeTier.SIZE_1K
-    assert result.actual_size_verification.requested_aspect_ratio == ImageAspectRatio.SQUARE
-    assert result.actual_size_verification.expected_width == 1024
-    assert result.actual_size_verification.expected_height == 1024
-    assert result.actual_size_verification.actual_width == 1
-    assert result.actual_size_verification.actual_height == 1
-    assert result.actual_size_verification.is_consistent is False
 
 
 def test_nano_generate_uses_active_preset_runtime(monkeypatch, tmp_path: Path):
@@ -128,7 +123,7 @@ def test_nano_generate_uses_active_preset_runtime(monkeypatch, tmp_path: Path):
         "Content-Type": "application/json",
         "x-goog-api-key": "env-secret-key",
     }
-    assert result.file_path.endswith("override.png")
+    assert result.save_path.endswith("override.png")
 
 
 def test_nano_generate_supports_per_call_preset_and_api_key_override(monkeypatch, tmp_path: Path):
@@ -164,8 +159,8 @@ def test_nano_generate_supports_per_call_preset_and_api_key_override(monkeypatch
         "Content-Type": "application/json",
         "x-goog-api-key": "request-secret-key",
     }
-    assert captured["timeout"] == 200
-    assert result.file_path.endswith("override-call.png")
+    assert captured["timeout"] == 300
+    assert result.save_path.endswith("override-call.png")
 
 
 def test_nano_generate_supports_apiyi_preset_override(monkeypatch, tmp_path: Path):
@@ -204,8 +199,8 @@ def test_nano_generate_supports_apiyi_preset_override(monkeypatch, tmp_path: Pat
         "Content-Type": "application/json",
     }
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "2K"}
-    assert captured["timeout"] == 200
-    assert result.file_path.endswith("apiyi-override-call.png")
+    assert captured["timeout"] == 300
+    assert result.save_path.endswith("apiyi-override-call.png")
 
 
 def test_nano_generate_supports_laozhang_pro_preset_override(monkeypatch, tmp_path: Path):
@@ -244,9 +239,9 @@ def test_nano_generate_supports_laozhang_pro_preset_override(monkeypatch, tmp_pa
         "Content-Type": "application/json",
     }
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "4K"}
-    assert captured["timeout"] == 200
+    assert captured["timeout"] == 300
     assert result.provider_model == "gemini-3-pro-image-preview"
-    assert result.file_path.endswith("laozhang-pro-override-call.png")
+    assert result.save_path.endswith("laozhang-pro-override-call.png")
 
 
 def test_nano_generate_rejects_preset_override_without_api_key(monkeypatch, tmp_path: Path):
@@ -284,8 +279,9 @@ def test_nano_parse_response_accepts_snake_case_inline_data(monkeypatch, tmp_pat
         save_path=str(tmp_path / "snake.webp"),
     )
 
-    assert result.mime_type == "image/webp"
-    assert result.file_path.endswith("snake.webp")
+    assert isinstance(result, ImageToolBase64AsyncResult)
+    assert result.response_format == "inlineData/base64 (image/webp)"
+    assert result.save_path.endswith("snake.webp")
 
 
 def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
@@ -332,12 +328,10 @@ def test_nano_edit_builds_text_plus_inline_data(monkeypatch, tmp_path: Path):
     assert parts[0] == {"text": "add a hat"}
     assert "inlineData" in parts[1]
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "21:9", "imageSize": "4K"}
-    assert captured["timeout"] == 200
-    assert result.mime_type == "image/jpeg"
-    assert result.text_output == "done"
-    assert result.file_path.endswith("nano-edit.jpg")
-    assert result.width == 1
-    assert result.height == 1
+    assert captured["timeout"] == 300
+    assert isinstance(result, ImageToolBase64AsyncResult)
+    assert result.response_format == "inlineData/base64 (image/jpeg)"
+    assert result.save_path.endswith("nano-edit.jpg")
 
 
 def test_nano_rejects_missing_image_modality(monkeypatch):
@@ -381,10 +375,10 @@ def test_nano_uses_enum_size_selection(monkeypatch, tmp_path: Path):
     )
 
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "2K"}
-    assert result.file_path.endswith("enum.png")
+    assert result.save_path.endswith("enum.png")
 
 
-def test_nano_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
+def test_nano_generate_does_not_retry_after_request_error(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
     monkeypatch.setenv("IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY", "secret-key")
     calls = {"post": 0}
@@ -403,13 +397,13 @@ def test_nano_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", flaky_post)
 
-    result = nano_banana_2_official_generate(
-        version=ToolVersion.V1,
-        mode=ImageToolMode.GENERATE,
-        prompt="retry nano",
-        save_path=str(tmp_path / "nano-retry.png"),
-        response_modalities=[ResponseModality.IMAGE],
-    )
+    with pytest.raises(httpx.RequestError, match="flaky network"):
+        nano_banana_2_official_generate(
+            version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            prompt="no retry nano",
+            save_path=str(tmp_path / "nano-retry.png"),
+            response_modalities=[ResponseModality.IMAGE],
+        )
 
-    assert calls["post"] == 2
-    assert result.file_path.endswith("nano-retry.png")
+    assert calls["post"] == 1

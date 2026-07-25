@@ -9,8 +9,8 @@ import httpx
 from ..config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS
 from ..contracts.enums import ImageResponseModality
 from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
-from ..models.common import ImageToolResult, ToolVersion
-from .temporary_common import persist_temporary_output
+from ..models.common import ImageToolAsyncResult, ToolVersion
+from .temporary_common import persist_temporary_output_async
 
 NANO_BANANA_2_TEMPORARY_NAME = "nano_banana_2_temporary"
 
@@ -26,7 +26,7 @@ def nano_banana_2_temporary_generate(
     image_size: ImageSizeTier = ImageSizeTier.SIZE_1K,
     response_modalities: list[ImageResponseModality] | None = None,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-) -> ImageToolResult:
+) -> ImageToolAsyncResult:
     """执行 nano_banana_2_temporary_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：
@@ -57,7 +57,7 @@ def nano_banana_2_temporary_generate(
     response_json = response.json()
     if not isinstance(response_json, dict):
         raise ValueError("temporary provider response is not a JSON object")
-    return persist_temporary_output(
+    return persist_temporary_output_async(
         NANO_BANANA_2_TEMPORARY_NAME,
         response_json,
         save_path,

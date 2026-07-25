@@ -8,7 +8,7 @@ from ..config import get_settings
 from ..contracts.enums import ImageBackground, ImageCount, ImageModeration, ImageOutputFormat, ImageQuality
 from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
 from ..contracts.presets import PresetToolName
-from ..models.common import ImageToolMode, ImageToolResult, InputImage, ToolVersion
+from ..models.common import ImageToolAsyncResult, ImageToolMode, InputImage, ToolVersion
 from ..presets.base import BaseGptImage2Preset
 from ..presets.models import GptImage2EditExecutionRequest, GptImage2GenerateExecutionRequest
 from .official_common import resolve_official_preset_execution
@@ -60,7 +60,7 @@ def gpt_image_2_official_generate(
     n: GptImageCount = GptImageCount.SINGLE,
     preset: str | None = None,
     api_key: str | None = None,
-) -> ImageToolResult:
+) -> ImageToolAsyncResult:
     """执行 gpt_image_2_official_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：
@@ -101,7 +101,7 @@ def gpt_image_2_official_edit(
     background: GptImageBackground = GptImageBackground.AUTO,
     preset: str | None = None,
     api_key: str | None = None,
-) -> ImageToolResult:
+) -> ImageToolAsyncResult:
     """执行 gpt_image_2_official_edit，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：

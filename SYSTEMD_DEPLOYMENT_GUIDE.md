@@ -112,6 +112,8 @@ After=default.target
 Type=simple
 WorkingDirectory=%h/mcp/image-generate-mcp
 EnvironmentFile=%h/mcp/image-generate-mcp/.env
+Environment=HTTPS_PROXY=http://127.0.0.1:7897
+Environment=HTTP_PROXY=http://127.0.0.1:7897
 ExecStart=%h/mcp/image-generate-mcp/.venv/bin/image-generate-mcp-remote --transport streamable-http --host 127.0.0.1 --port 25235
 Restart=always
 RestartSec=3
@@ -152,6 +154,23 @@ LOG_LEVEL=INFO
 - `IMAGE_OUTPUT_DIR`
 - `LOG_LEVEL`
 
+### 7.1 代理配置（重要）
+
+如果上游 API（如 `api.laozhang.ai`、`api.apiyi.com` 等）需要通过代理访问，
+必须为服务进程注入 `HTTPS_PROXY` / `HTTP_PROXY`。
+
+**注意：不要把代理变量写入 `.env` 文件。** 本项目的 `pydantic-settings` 会校验
+`.env` 中的所有变量，未知变量会被拒绝导致服务启动失败。正确做法是在 systemd
+unit 文件中通过 `Environment=` 指令注入（见第 6 节 unit 示例）：
+
+```ini
+Environment=HTTPS_PROXY=http://127.0.0.1:7897
+Environment=HTTP_PROXY=http://127.0.0.1:7897
+```
+
+这样代理变量直接进入进程的 `os.environ`，`httpx` 可以正常读取，而不经过
+pydantic-settings 校验。
+
 ## 8. 已废弃的旧环境变量口径
 
 下面这些旧变量不再是当前正式 preset 工具的部署入口：
@@ -167,7 +186,7 @@ LOG_LEVEL=INFO
 
 原因：
 
-- `base_url`、`model`、`timeout`、`retry` 现在由 active preset 决定
+- `base_url`、`model`、`timeout` 现在由 active preset 决定；`retry_count` 固定为 `0`
 - 如果要切换默认线路，应修改 `..._PRESET`
 - 如果要按次临时切换，应在工具调用时传 `preset + api_key`
 
@@ -175,19 +194,16 @@ LOG_LEVEL=INFO
 
 当前正式 preset 的预算规则是：
 
-- 统一只有 `1` 次默认机会 + `1` 次重试机会
-- 即 `retry_count=1`，总尝试次数为 `2`
+- 每个 MCP 图片请求只进行 `1` 次上游尝试
+- 即 `retry_count=0`，失败后立即返回失败
 - 正式工具上游 HTTP timeout 不由 `.env` 控制，而由 active preset 决定
-
-当前预算口径：
-
-- 仅支持 `1K` 的 preset：`120s`
-- 支持 `2K` 的 preset：`150s`
-- 支持 `4K` 的 preset：`200s`
+- 本次零重试改造不改变任何 preset 已配置的 timeout
 
 因此 MCP 客户端仍应显式配置较大的 tool-call timeout，推荐继续使用：
 
 - `500000` 毫秒（500 秒）
+
+上游成功返回后，服务会启动后台线程执行 base64 解码或 URL 下载与落盘，并固定等待 `1` 秒后向 MCP 调用方返回确认消息。确认中的 `request_completed=true` 只代表上游请求完成，最终成果仍应以 `save_path` 文件为准；URL 类型响应会同时返回 `source_url` 作为备用。
 
 ## 10. 如何更新版本
 

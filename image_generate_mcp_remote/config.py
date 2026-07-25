@@ -17,12 +17,12 @@ load_dotenv()
 GPT_IMAGE_2_OFFICIAL_NAME = "gpt_image_2_official"
 NANO_BANANA_2_OFFICIAL_NAME = "nano_banana_2_official"
 SERVICE_NAME = "image-generate-mcp-remote"
-SERVICE_VERSION = "1.0.0-beta2"
+SERVICE_VERSION = "1.0.0-beta3"
 
 DEFAULT_OUTPUT_DIR = Path("storage/images")
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 180.0
-DEFAULT_TOOL_RETRY_COUNT = 3
+DEFAULT_TOOL_RETRY_COUNT = 0
 
 GPT_IMAGE_2_OFFICIAL_API_KEY_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY"
 GPT_IMAGE_2_OFFICIAL_PRESET_ENV = "IMG_GEN_GPT_IMAGE_2_OFFICIAL_PRESET"
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
         - 作为模块间传递对象，保证类型与字段命名一致
     """
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     image_output_dir: Path = Field(default=DEFAULT_OUTPUT_DIR, alias=IMAGE_OUTPUT_DIR_ENV)
     log_level: str = Field(default=DEFAULT_LOG_LEVEL, alias=LOG_LEVEL_ENV)

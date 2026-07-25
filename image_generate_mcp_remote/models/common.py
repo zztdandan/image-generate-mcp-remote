@@ -57,6 +57,19 @@ class ImageToolStatus(StrEnum):
     OK = "ok"
 
 
+class ImageRawResultType(StrEnum):
+    """ImageRawResultType 描述上游图片响应中尚未落盘的原始载荷类型。"""
+
+    BASE64 = "base64"
+    URL = "url"
+
+
+class ImagePersistenceStatus(StrEnum):
+    """ImagePersistenceStatus 描述 MCP 返回时后台落盘任务的状态。"""
+
+    PROCESSING = "processing"
+
+
 class InputImageSourceType(StrEnum):
     """InputImageSourceType 是 跨工具通用数据模型 的枚举集合，作用范围为本模块对外与对内的有限取值。
     
@@ -183,6 +196,39 @@ class ImageToolResult(BaseModel):
     usage: UsageInfo | None = None
     provider_response_excerpt: dict[str, str] | None = None
     text_output: str | None = None
+
+
+class ImageToolAsyncResultBase(BaseModel):
+    """ImageToolAsyncResultBase 是上游完成后立即返回的异步落盘确认结果。"""
+
+    status: ImageToolStatus = Field(default=ImageToolStatus.OK)
+    tool_name: str
+    tool_version: ToolVersion
+    mode: ImageToolMode
+    provider_model: str
+    request_completed: bool = True
+    persistence_status: ImagePersistenceStatus = ImagePersistenceStatus.PROCESSING
+    save_path: str
+    elapsed_seconds: float
+    message: str
+
+
+class ImageToolBase64AsyncResult(ImageToolAsyncResultBase):
+    """ImageToolBase64AsyncResult 描述 base64/inlineData 原始响应及预计落盘大小。"""
+
+    raw_result_type: Literal[ImageRawResultType.BASE64] = ImageRawResultType.BASE64
+    response_format: str
+    estimated_file_size_bytes: int
+
+
+class ImageToolUrlAsyncResult(ImageToolAsyncResultBase):
+    """ImageToolUrlAsyncResult 描述 URL 原始响应；URL 仅作为本地落盘成果的备用来源。"""
+
+    raw_result_type: Literal[ImageRawResultType.URL] = ImageRawResultType.URL
+    source_url: str
+
+
+ImageToolAsyncResult: TypeAlias = ImageToolBase64AsyncResult | ImageToolUrlAsyncResult
 
 
 class ToolEnvValuesNonSecret(BaseModel):

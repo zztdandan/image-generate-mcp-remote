@@ -79,7 +79,7 @@ def list_image_tools_catalog_tool(version: ToolVersion) -> dict[str, object]:
         - 步骤 2：遍历配置后生成统一目录结构
     """
 
-    return list_image_tools_catalog(version).model_dump(mode="json")
+    return list_image_tools_catalog(version).model_dump(mode="json", exclude_none=True)
 
 
 @mcp.tool(
@@ -94,17 +94,18 @@ def list_image_presets_tool(version: ToolVersion) -> dict[str, object]:
         - 步骤 2：输出统一的 preset 列表结构
     """
 
-    return list_image_presets(version).model_dump(mode="json")
+    return list_image_presets(version).model_dump(mode="json", exclude_none=True)
 
 
 @mcp.tool(
     title="GPT Image 2 Official",
     description=(
         "Generate or edit images via the OpenAI Images compatible gateway. "
-        "The active startup preset owns provider, model, timeout, retry, and field dispatch behavior. "
+        "The active startup preset owns provider, model, timeout, and field dispatch behavior; every request is attempted exactly once. "
         "You may override preset and api_key per call; if preset is supplied, api_key is required in the same request. "
         "Without overrides, the configured preset and API key are used. "
         "Select image_size plus aspect_ratio from the catalog enums to derive the provider size preset. "
+        "After the upstream response, decoding/downloading and persistence continue in a background thread; the tool returns an acknowledgement after one second. "
         "Call list_image_tools_catalog first when you need the current supported size presets."
     ),
 )
@@ -149,7 +150,7 @@ def gpt_image_2_official(
             n=n,
             preset=preset,
             api_key=api_key,
-        ).model_dump(mode="json")
+        ).model_dump(mode="json", exclude_none=True)
     return gpt_image_2_official_edit(
         version=version,
             mode=ImageToolMode.EDIT,
@@ -165,17 +166,18 @@ def gpt_image_2_official(
             background=background,
             preset=preset,
             api_key=api_key,
-        ).model_dump(mode="json")
+        ).model_dump(mode="json", exclude_none=True)
 
 
 @mcp.tool(
     title="Nano Banana 2 Official",
     description=(
         "Generate or edit images via the Gemini compatible gateway. "
-        "The active startup preset owns provider, model, timeout, retry, and field dispatch behavior. "
+        "The active startup preset owns provider, model, timeout, and field dispatch behavior; every request is attempted exactly once. "
         "You may override preset and api_key per call; if preset is supplied, api_key is required in the same request. "
         "Without overrides, the configured preset and API key are used. "
         "Use image_size plus aspect_ratio from the shared catalog enums. "
+        "After the upstream response, decoding and persistence continue in a background thread; the tool returns an acknowledgement after one second. "
         "Invalid size errors include the supported preset list."
     ),
 )
@@ -213,7 +215,7 @@ def nano_banana_2_official(
             include_thoughts=include_thoughts,
             preset=preset,
             api_key=api_key,
-        ).model_dump(mode="json")
+        ).model_dump(mode="json", exclude_none=True)
     return nano_banana_2_official_edit(
         version=version,
         mode=ImageToolMode.EDIT,
@@ -227,7 +229,7 @@ def nano_banana_2_official(
         include_thoughts=include_thoughts,
         preset=preset,
         api_key=api_key,
-    ).model_dump(mode="json")
+    ).model_dump(mode="json", exclude_none=True)
 
 
 @mcp.tool(
@@ -281,7 +283,7 @@ def gpt_image_2_temporary(
         send_background=send_background,
         send_moderation=send_moderation,
         timeout_seconds=timeout_seconds,
-    ).model_dump(mode="json")
+    ).model_dump(mode="json", exclude_none=True)
 
 
 @mcp.tool(
@@ -321,7 +323,7 @@ def nano_banana_2_temporary(
         image_size=image_size,
         response_modalities=response_modalities,
         timeout_seconds=timeout_seconds,
-    ).model_dump(mode="json")
+    ).model_dump(mode="json", exclude_none=True)
 
 
 def main() -> None:

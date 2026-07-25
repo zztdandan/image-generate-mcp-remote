@@ -4,8 +4,8 @@
 
 > 本子项目在源码仓开发时复用工作区根目录 `.venv`。这只适用于开发与测试；正式 systemd 部署推荐使用 wheel 安装到独立部署目录 `.venv`，不要使用源码 editable 安装作为生产形态。
 
-> 注意，timeout为关键参数；当前 preset 统一只有 `1` 次默认机会 + `1` 次重试机会，且按支持尺寸档位分配上游 HTTP 超时：仅 `1K` 为 `120s`、支持 `2K` 为 `150s`、支持 `4K` 为 `200s`。如果不设置客户端超时，默认 `30` 秒通常一定生成不了图片。
-> 文档仍推荐将 MCP 客户端 `timeout` 显式设置为 `500000` 毫秒（500 秒）；它可以覆盖当前 `4K` preset 最长约 `400` 秒的两次尝试预算，并为网络抖动留出余量。
+> 注意，timeout 为关键参数；每个 MCP 图片请求固定只发起 `1` 次上游尝试，`retry_count=0`，失败后立即返回失败。各 preset 现有的上游 HTTP timeout 保持不变。如果不设置客户端超时，默认 `30` 秒通常仍不足以等待图片生成。
+> 文档仍推荐将 MCP 客户端 `timeout` 显式设置为 `500000` 毫秒（500 秒），用于覆盖单次上游生成预算并为网络抖动留出余量。
 
 ## 项目能力
 
@@ -17,18 +17,18 @@
 
 ## 启动期预设（Preset）
 
-Provider、model、base_url、timeout、retry 及字段派发行为默认由启动期 preset 决定。
+Provider、model、base_url、timeout 及字段派发行为默认由启动期 preset 决定；重试不再属于 preset 可调策略，固定为 `0`。
 
 这次 `1.0.0-beta1` 版本把“不同供应商 / 不同兼容站点的差异”正式上收为一层稳定的预设体系：
 
 - 正式工具对外仍保持稳定的 MCP tool schema，不因为切换供应商就改参数结构
 - 站点差异不再散落在 tool 逻辑或零散环境变量里，而是收敛到内置 preset class
-- 每个 preset 负责声明自己的 `provider`、`model`、`base_url`、`timeout`、`retry`、支持 `mode`、尺寸能力与字段派发策略
+- 每个 preset 负责声明自己的 `provider`、`model`、`base_url`、`timeout`、支持 `mode`、尺寸能力与字段派发策略；所有 preset 的 `retry_count` 固定为 `0`
 - catalog 的职责也从“配置报告”收敛为“调用指导”：告诉调用方当前 active preset 下该怎么安全传参
 
 可以把 preset 理解为：
 
-> “同一个 MCP 图片工具，在某个供应商 / 某个模型 / 某种协议下，应该怎样发请求、哪些字段该转发、支持哪些尺寸与模式、超时和重试如何设置。”
+> “同一个 MCP 图片工具，在某个供应商 / 某个模型 / 某种协议下，应该怎样发请求、哪些字段该转发、支持哪些尺寸与模式、超时如何设置。”
 > 由于不同第三方供应商之间，虽然大致遵循同一个 调用规范，但是总有这里那里的细节不同，有些不能发 quality ，有些不能发size，有些默认就有超时，有些需要我们自己设置超时；所以我们把这些细节都收敛到 preset 里，调用方只要选对 preset，剩下的可以编码处理。
 
 
@@ -242,7 +242,7 @@ uv run image-generate-mcp-remote --transport streamable-http --host 127.0.0.1 --
 }
 ```
 
-上面的 `timeout` 不要省略。注意，timeout为关键参数；当前 preset 统一只有 `1` 次默认机会 + `1` 次重试机会，且按支持尺寸档位分配上游 HTTP 超时：仅 `1K` 为 `120s`、支持 `2K` 为 `150s`、支持 `4K` 为 `200s`。文档示例推荐值为 `500000` 毫秒（500 秒），用于覆盖当前 `4K` preset 最长约 `400` 秒的两次尝试预算。
+上面的 `timeout` 不要省略。每个 MCP 图片请求只进行 `1` 次上游尝试且不会重试；active preset 的现有上游 HTTP timeout 保持不变。文档示例继续推荐 `500000` 毫秒（500 秒），用于覆盖单次生成预算并为网络抖动留出余量。
 
 ### 方式四：SSE 远程接入
 
@@ -262,7 +262,7 @@ uv run image-generate-mcp-remote --transport sse --host 127.0.0.1 --port 3001
 - `http://127.0.0.1:3001/sse`
 - `http://127.0.0.1:3001/messages/`
 
-如果客户端还支持单独配置 MCP tool-call 超时，也应显式设置 `timeout`；文档推荐值为 `500000` 毫秒（500 秒），用于覆盖当前 `4K` preset 两次尝试的最长预算，并为网络抖动留出余量。
+如果客户端还支持单独配置 MCP tool-call 超时，也应显式设置 `timeout`；文档推荐值为 `500000` 毫秒（500 秒），用于覆盖单次上游生成预算，并为网络抖动留出余量。
 
 ## 工具列表
 
@@ -281,10 +281,10 @@ OpenAI Images 兼容工具。
 
 - `mode=generate` 时调用文生图
 - `mode=edit` 时调用参考图编辑 / 图生图
-- provider、model、base_url、timeout、retry 及字段派发默认由启动期 preset 决定
+- provider、model、base_url、timeout 及字段派发默认由启动期 preset 决定；上游请求固定只尝试一次
 - 可按次传入 `preset` 与 `api_key` 临时切换 preset；若传 `preset`，必须同传 `api_key`
 - 尺寸输入统一为 `image_size` + `aspect_ratio` 两个枚举，preset 按共享尺寸合同映射到对应 GPT 请求像素尺寸
-- 支持解析 `data[0].b64_json` 与 `data[0].url`；若上游返回 `url`，服务端会自动下载并保存到 `save_path`
+- 支持识别 `data[0].b64_json` 与 `data[0].url`；解码或下载及本地落盘在后台线程继续执行
 - 如传入不支持的枚举组合，错误信息会直接列出该工具支持的尺寸预设；也可先调用 `list_image_tools_catalog` 查看 `supported_size_presets`
 
 ### `nano_banana_2_official`
@@ -293,7 +293,7 @@ Gemini `generateContent` 兼容工具。
 
 - `mode=generate` 时调用文生图
 - `mode=edit` 时调用参考图编辑 / 图生图
-- provider、model、base_url、timeout、retry 及字段派发默认由启动期 preset 决定
+- provider、model、base_url、timeout 及字段派发默认由启动期 preset 决定；上游请求固定只尝试一次
 - 可按次传入 `preset` 与 `api_key` 临时切换 preset；若传 `preset`，必须同传 `api_key`
 - 鉴权请求头同时发送 `Authorization: Bearer <key>` 与 `x-goog-api-key: <key>` 以兼容更多 Gemini 兼容网关
 - 响应解析兼容 `inlineData` / `inline_data` 与 `mimeType` / `mime_type`
@@ -318,6 +318,16 @@ Gemini `generateContent` 兼容站点的临时探索工具。
 - 默认发送文本 prompt 与保守 `generationConfig.imageConfig`
 - 不进入 preset registry，不应作为生产默认工具；试跑成功后应新增 provider guide 与正式 preset class
 - 输出检测兼容 Gemini `inlineData` / `inline_data`，也会扫描文本中的 markdown 图片链接、data URL 与 HTTPS URL
+
+## 异步响应与后台落盘
+
+四个图片生成工具在收到并校验上游 JSON 响应后，会先识别原始图片载荷类型，再启动后台线程完成 base64 解码或 URL 下载、尺寸校验和本地落盘。MCP 调用固定等待 `1` 秒后返回确认结果，不再等待落盘完成。
+
+- `request_completed=true` 表示本轮上游请求已成功返回，不表示后台落盘已经结束
+- `persistence_status=processing` 表示应继续等待 `save_path` 出现；后台任务不会再次请求上游
+- base64 / `inlineData` 响应返回 `raw_result_type`、具体 `response_format` 和 `estimated_file_size_bytes`，不会返回 URL 或额外的 provider 信息
+- URL 响应额外直接返回 `source_url`，但 `message` 会明确要求调用方优先使用 `save_path` 的落盘成果，仅把 URL 作为备用
+- 后台解析或落盘失败会写入服务日志；由于 MCP 确认结果已返回，不能回写或改变本次调用结果
 
 ## 内置技能
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, PresetStability
+from ...contracts.presets import PresetDispatchPolicy, PresetFieldDispatchMode, PresetProvider, PresetRuntimeConfig, PresetStability
 
 
 class CopperAIGptImage2Preset(BaseGptImage2Preset):
@@ -26,3 +26,4 @@ class CopperAIGptImage2Preset(BaseGptImage2Preset):
         moderation=PresetFieldDispatchMode.DROP,
     )
     notes = ("Provider guide has platform-level details only; model parameter support is not fully verified.",)
+    runtime = PresetRuntimeConfig(timeout_seconds=120.0, retry_count=0)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetProvider
+from ...contracts.presets import PresetProvider, PresetRuntimeConfig
 
 
 class LaoZhangGptImage2SoraOfficialPreset(BaseGptImage2Preset):
@@ -18,3 +18,4 @@ class LaoZhangGptImage2SoraOfficialPreset(BaseGptImage2Preset):
     provider = PresetProvider.LAOZHANG
     base_url = "https://api.laozhang.ai/v1"
     notes = ("LaoZhang Sora2Official token group supports official Images API size and quality fields.",)
+    runtime = PresetRuntimeConfig(timeout_seconds=120.0, retry_count=0)

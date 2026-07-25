@@ -21,9 +21,10 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
     assert gpt_entry.parameter_guidance["preset"].accepted_by_mcp is True
     assert gpt_entry.parameter_guidance["api_key"].must_pair_with == "preset"
     assert gpt_entry.env_values_non_secret.output_dir == str(tmp_path / "images")
-    assert gpt_entry.env_values_non_secret.request_timeout_seconds == 200
+    assert gpt_entry.env_values_non_secret.request_timeout_seconds == 120
     assert gpt_entry.env_values_non_secret.request_timeout_source == "preset"
-    assert gpt_entry.env_values_non_secret.retry_count == 1
+    assert gpt_entry.env_values_non_secret.retry_count == 0
+    assert gpt_entry.env_values_non_secret.retry_count_source == "fixed"
     assert "1K + 1:1 (gpt=1280x1280)" in gpt_entry.supported_size_presets
     assert gpt_entry.api_key_configured is True
 

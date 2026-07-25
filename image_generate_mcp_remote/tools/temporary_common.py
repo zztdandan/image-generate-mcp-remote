@@ -7,7 +7,8 @@ import re
 
 import httpx
 
-from ..models.common import ImageToolMode, ImageToolResult, ToolVersion, UsageInfo
+from ..background import estimate_base64_decoded_size, schedule_background_persistence
+from ..models.common import ImageToolAsyncResult, ImageToolBase64AsyncResult, ImageToolMode, ImageToolResult, ImageToolUrlAsyncResult, ToolVersion, UsageInfo
 from ..storage import build_image_uri, decode_base64_image, require_image_dimensions, save_image_bytes_to_path
 
 TEMPORARY_RESPONSE_EXCERPT_LIMIT = 400
@@ -129,6 +130,64 @@ def persist_temporary_output(
         usage=UsageInfo(),
         provider_response_excerpt={"temporary": "true"},
     )
+
+
+def persist_temporary_output_async(
+    tool_name: str,
+    response_json: dict[str, object],
+    save_path: str,
+    timeout_seconds: float,
+    elapsed_seconds: float,
+    provider_model: str,
+) -> ImageToolAsyncResult:
+    """识别临时工具原始响应并把下载/解码/校验/落盘放入后台线程。"""
+
+    image_base64, image_url = extract_json_image_output(response_json)
+    if image_base64 is not None:
+        estimated_size = estimate_base64_decoded_size(image_base64)
+        acknowledgement: ImageToolAsyncResult = ImageToolBase64AsyncResult(
+            tool_name=tool_name,
+            tool_version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            provider_model=provider_model,
+            save_path=save_path,
+            elapsed_seconds=elapsed_seconds,
+            response_format="base64 (provider image format)",
+            estimated_file_size_bytes=estimated_size,
+            message=(
+                "Upstream request completed successfully. The raw result is base64 image data "
+                f"(provider image format, approximately {estimated_size} bytes). Background persistence is processing."
+            ),
+        )
+    elif image_url is not None:
+        acknowledgement = ImageToolUrlAsyncResult(
+            tool_name=tool_name,
+            tool_version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            provider_model=provider_model,
+            save_path=save_path,
+            elapsed_seconds=elapsed_seconds,
+            source_url=image_url,
+            message=(
+                "Upstream request completed successfully and returned a URL. Background download and persistence are processing. "
+                "Prefer the file at save_path after it appears; use source_url only as a fallback."
+            ),
+        )
+    else:
+        raise ValueError("temporary provider response did not contain a recognizable image output")
+
+    schedule_background_persistence(
+        task_name=tool_name,
+        persistence=lambda: persist_temporary_output(
+            tool_name=tool_name,
+            response_json=response_json,
+            save_path=save_path,
+            timeout_seconds=timeout_seconds,
+            elapsed_seconds=elapsed_seconds,
+            provider_model=provider_model,
+        ),
+    )
+    return acknowledgement
 
 
 def data_url_from_bytes(mime_type: str, image_bytes: bytes) -> str:

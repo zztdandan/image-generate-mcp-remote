@@ -8,7 +8,7 @@ from ..contracts.enums import ImageResponseModality, ImageThinkingLevel
 from ..config import get_settings
 from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
 from ..contracts.presets import PresetToolName
-from ..models.common import ImageToolMode, ImageToolResult, InputImage, ToolVersion
+from ..models.common import ImageToolAsyncResult, ImageToolMode, InputImage, ToolVersion
 from ..presets.base import BaseNanoBananaPreset
 from ..presets.models import NanoBananaEditExecutionRequest, NanoBananaGenerateExecutionRequest
 from .official_common import resolve_official_preset_execution
@@ -61,7 +61,7 @@ def nano_banana_2_official_generate(
     include_thoughts: bool = False,
     preset: str | None = None,
     api_key: str | None = None,
-) -> ImageToolResult:
+) -> ImageToolAsyncResult:
     """执行 nano_banana_2_official_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：
@@ -98,7 +98,7 @@ def nano_banana_2_official_edit(
     include_thoughts: bool = False,
     preset: str | None = None,
     api_key: str | None = None,
-) -> ImageToolResult:
+) -> ImageToolAsyncResult:
     """执行 nano_banana_2_official_edit，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：

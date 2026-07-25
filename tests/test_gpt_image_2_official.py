@@ -1,14 +1,17 @@
 import base64
+import threading
+import time
 from pathlib import Path
 
 import httpx
 import pytest
 
 from image_generate_mcp_remote.contracts.image_size import ImageAspectRatio, ImageSizeTier
+from image_generate_mcp_remote.background import wait_for_background_persistence
 from image_generate_mcp_remote.contracts.presets import PresetToolName
 from image_generate_mcp_remote.config import get_settings
 from image_generate_mcp_remote.errors import ValidationError
-from image_generate_mcp_remote.models.common import ImageToolMode, ToolVersion
+from image_generate_mcp_remote.models.common import ImageRawResultType, ImageToolBase64AsyncResult, ImageToolMode, ImageToolUrlAsyncResult, ToolVersion
 from image_generate_mcp_remote.presets.base import GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX
 from image_generate_mcp_remote.presets.loader import resolve_preset_for_tool
 from image_generate_mcp_remote.presets.openai.gpt_image_2 import OpenAIGptImage2Preset
@@ -88,22 +91,15 @@ def test_gpt_generate_builds_json_request_and_saves_file(monkeypatch, tmp_path: 
         "moderation": "auto",
         "n": 1,
     }
-    assert Path(result.file_path).exists()
-    assert result.file_path.endswith("generated.png")
-    assert result.image_uri.startswith("file://")
-    assert result.mime_type == "image/png"
+    assert isinstance(result, ImageToolBase64AsyncResult)
+    assert Path(result.save_path).exists()
+    assert result.save_path.endswith("generated.png")
+    assert result.request_completed is True
+    assert result.raw_result_type is ImageRawResultType.BASE64
+    assert result.response_format == "base64 (image/png)"
+    assert result.estimated_file_size_bytes == len(PNG_1X1_BYTES)
     assert result.elapsed_seconds >= 0
-    assert result.width == 1
-    assert result.height == 1
-    assert result.actual_size_verification is not None
-    assert result.actual_size_verification.requested_image_size == ImageSizeTier.SIZE_1K
-    assert result.actual_size_verification.requested_aspect_ratio == ImageAspectRatio.SQUARE
-    assert result.actual_size_verification.expected_width == 1280
-    assert result.actual_size_verification.expected_height == 1280
-    assert result.actual_size_verification.actual_width == 1
-    assert result.actual_size_verification.actual_height == 1
-    assert result.actual_size_verification.is_consistent is False
-    assert captured["timeout"] == 200
+    assert captured["timeout"] == 120
 
 
 def test_gpt_generate_uses_active_laozhang_preset_dispatch(monkeypatch, tmp_path: Path):
@@ -181,7 +177,7 @@ def test_gpt_generate_supports_per_call_preset_and_api_key_override(monkeypatch,
     assert captured["timeout"] == 120
     assert "Target image size: 1280x720." in captured["json"]["prompt"]
     assert captured["json"]["prompt"].endswith(GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX)
-    assert result.file_path.endswith("override-per-call.png")
+    assert result.save_path.endswith("override-per-call.png")
 
 
 def test_gpt_generate_rejects_preset_override_without_api_key(monkeypatch, tmp_path: Path):
@@ -242,13 +238,59 @@ def test_gpt_generate_downloads_url_response(monkeypatch, tmp_path: Path):
 
     assert captured["post_url"] == "https://api.openai.com/v1/images/generations"
     assert captured["download_url"] == "http://cdn.example.com/generated.png"
-    assert captured["download_timeout"] == 200
+    assert captured["download_timeout"] == 120
     assert captured["follow_redirects"] is True
-    assert result.file_path.endswith("from-url.png")
-    assert result.provider_response_excerpt == {
-        "created": "321",
-        "source_url": "http://cdn.example.com/generated.png",
-    }
+    assert isinstance(result, ImageToolUrlAsyncResult)
+    assert result.save_path.endswith("from-url.png")
+    assert result.raw_result_type is ImageRawResultType.URL
+    assert result.source_url == "http://cdn.example.com/generated.png"
+    assert "Prefer the file at save_path" in result.message
+
+
+def test_gpt_url_persistence_does_not_block_acknowledgement(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
+    release_download = threading.Event()
+    save_path = tmp_path / "async-url.png"
+
+    def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        return DummyResponse({"data": [{"url": "https://cdn.example.com/async.png"}]})
+
+    fake_get_response = type(
+        "FakeAsyncDownloadResponse",
+        (),
+        {
+            "content": PNG_1X1_BYTES,
+            "status_code": 200,
+            "text": "download",
+            "headers": {"Content-Type": "image/png"},
+            "is_error": False,
+        },
+    )
+
+    def delayed_get(url: str, timeout: float, follow_redirects: bool):
+        release_download.wait(timeout=3.0)
+        return fake_get_response()
+
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", fake_post)
+    monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.get", delayed_get)
+
+    started_at = time.perf_counter()
+    result = gpt_image_2_official_generate(
+        version=ToolVersion.V1,
+        mode=ImageToolMode.GENERATE,
+        prompt="async URL",
+        save_path=str(save_path),
+    )
+    acknowledgement_elapsed = time.perf_counter() - started_at
+
+    assert isinstance(result, ImageToolUrlAsyncResult)
+    assert 0.9 <= acknowledgement_elapsed < 2.0
+    assert result.source_url == "https://cdn.example.com/async.png"
+    assert not save_path.exists()
+
+    release_download.set()
+    wait_for_background_persistence()
+    assert save_path.exists()
 
 
 def test_gpt_generate_vip_preset_sends_minimal_payload(monkeypatch, tmp_path: Path):
@@ -279,13 +321,13 @@ def test_gpt_generate_vip_preset_sends_minimal_payload(monkeypatch, tmp_path: Pa
 
     assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
-    assert captured["timeout"] == 150
+    assert captured["timeout"] == 300
     assert captured["json"] == {
         "prompt": f"draw a lantern\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}",
         "model": "gpt-image-2-vip",
         "size": "1280x720",
     }
-    assert result.file_path.endswith("vip-minimal.png")
+    assert result.save_path.endswith("vip-minimal.png")
 
 
 def test_gpt_generate_allows_preset_to_disable_fragment_reduction_suffix(monkeypatch, tmp_path: Path):
@@ -407,11 +449,10 @@ def test_gpt_edit_builds_multipart_request_with_mask(monkeypatch, tmp_path: Path
     assert captured["files"][0][0] == "image[]"
     assert captured["files"][0][1][0] == "input.png"
     assert captured["files"][1][0] == "mask"
-    assert captured["timeout"] == 200
-    assert result.mime_type == "image/webp"
-    assert result.file_path.endswith("edited.webp")
-    assert result.width == 1
-    assert result.height == 1
+    assert isinstance(result, ImageToolBase64AsyncResult)
+    assert captured["timeout"] == 120
+    assert result.response_format == "base64 (image/webp)"
+    assert result.save_path.endswith("edited.webp")
 
 
 def test_gpt_generate_builds_provider_size_from_enums(monkeypatch, tmp_path: Path):
@@ -437,10 +478,10 @@ def test_gpt_generate_builds_provider_size_from_enums(monkeypatch, tmp_path: Pat
     )
 
     assert captured["json"]["size"] == "2048x1152"
-    assert result.file_path.endswith("bad-size.png")
+    assert result.save_path.endswith("bad-size.png")
 
 
-def test_gpt_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
+def test_gpt_generate_does_not_retry_after_request_error(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("IMAGE_OUTPUT_DIR", str(tmp_path))
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "secret-key")
     calls = {"post": 0}
@@ -454,29 +495,29 @@ def test_gpt_generate_retries_then_succeeds(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr("image_generate_mcp_remote.presets.base.httpx.post", flaky_post)
 
-    result = gpt_image_2_official_generate(
-        version=ToolVersion.V1,
-        mode=ImageToolMode.GENERATE,
-        prompt="retry",
-        save_path=str(tmp_path / "retry.png"),
-    )
+    with pytest.raises(httpx.RequestError, match="flaky network"):
+        gpt_image_2_official_generate(
+            version=ToolVersion.V1,
+            mode=ImageToolMode.GENERATE,
+            prompt="no retry",
+            save_path=str(tmp_path / "retry.png"),
+        )
 
-    assert calls["post"] == 2
-    assert result.file_path.endswith("retry.png")
+    assert calls["post"] == 1
 
 
-def test_laozhang_vip_preset_uses_150s_timeout_and_single_retry():
+def test_laozhang_vip_preset_keeps_timeout_and_disables_retry():
     resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "laozhang_gpt_image_2_vip").resolve()
 
-    assert resolved.config.runtime.timeout_seconds == 150
-    assert resolved.config.runtime.retry_count == 1
+    assert resolved.config.runtime.timeout_seconds == 300
+    assert resolved.config.runtime.retry_count == 0
 
 
-def test_right_codes_presets_use_size_based_timeout_and_single_retry():
+def test_right_codes_presets_keep_timeouts_and_disable_retry():
     gpt_resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "right_codes_gpt_image_2").resolve()
     vip_resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "right_codes_gpt_image_2_vip").resolve()
 
     assert gpt_resolved.config.runtime.timeout_seconds == 120
-    assert gpt_resolved.config.runtime.retry_count == 1
-    assert vip_resolved.config.runtime.timeout_seconds == 200
-    assert vip_resolved.config.runtime.retry_count == 1
+    assert gpt_resolved.config.runtime.retry_count == 0
+    assert vip_resolved.config.runtime.timeout_seconds == 300
+    assert vip_resolved.config.runtime.retry_count == 0

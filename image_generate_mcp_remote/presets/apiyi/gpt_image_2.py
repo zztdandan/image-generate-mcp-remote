@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetProvider
+from ...contracts.presets import PresetProvider, PresetRuntimeConfig
 
 
 class ApiYiGptImage2Preset(BaseGptImage2Preset):
@@ -18,3 +18,4 @@ class ApiYiGptImage2Preset(BaseGptImage2Preset):
     provider = PresetProvider.APIYI
     base_url = "https://api.apiyi.com/v1"
     notes = ("API易 Images API channel for gpt-image-2.",)
+    runtime = PresetRuntimeConfig(timeout_seconds=120.0, retry_count=0)

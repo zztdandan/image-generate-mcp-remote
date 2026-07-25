@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseNanoBananaPreset
+from ...contracts.presets import PresetRuntimeConfig
 
 
 class GoogleNanoBananaPreset(BaseNanoBananaPreset):
@@ -15,3 +16,4 @@ class GoogleNanoBananaPreset(BaseNanoBananaPreset):
 
     preset_id = "google_nano_banana"
     notes = ("Default Gemini generateContent compatible preset for nano_banana_2_official.",)
+    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=0)

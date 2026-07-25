@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..base import BaseGptImage2Preset
-from ...contracts.presets import PresetProvider
+from ...contracts.presets import PresetProvider, PresetRuntimeConfig
 
 
 class LaoZhangGptImage2EnterprisePreset(BaseGptImage2Preset):
@@ -18,3 +18,4 @@ class LaoZhangGptImage2EnterprisePreset(BaseGptImage2Preset):
     provider = PresetProvider.LAOZHANG
     base_url = "https://api.laozhang.ai/v1"
     notes = ("LaoZhang GPTImage2 Enterprise group is a pure official-key route with official parameter support.",)
+    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=0)

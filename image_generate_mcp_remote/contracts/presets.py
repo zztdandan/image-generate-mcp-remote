@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -124,7 +125,7 @@ class PresetRuntimeConfig(BaseModel):
     """
 
     timeout_seconds: float
-    retry_count: int
+    retry_count: Literal[0] = 0
 
 
 class PresetDispatchPolicy(BaseModel):

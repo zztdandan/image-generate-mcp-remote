@@ -18,5 +18,5 @@ class RightCodesNanoBanana2ImagesPreset(BaseGptImage2Preset):
     provider = PresetProvider.RIGHT_CODES
     base_url = "https://www.right.codes/draw/v1"
     model = "nano-banana-2"
-    runtime = PresetRuntimeConfig(timeout_seconds=200.0, retry_count=1)
+    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=0)
     notes = ("Uses OpenAI Images style endpoint despite the nano-banana-2 model name.",)

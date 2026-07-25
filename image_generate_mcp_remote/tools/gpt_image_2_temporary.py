@@ -9,8 +9,8 @@ import httpx
 from ..config import DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS
 from ..contracts.enums import ImageBackground, ImageModeration, ImageOutputFormat, ImageQuality
 from ..contracts.image_size import ImageAspectRatio, ImageSizeProvider, ImageSizeTier, provider_size_value
-from ..models.common import ImageToolResult, ToolVersion
-from .temporary_common import persist_temporary_output
+from ..models.common import ImageToolAsyncResult, ToolVersion
+from .temporary_common import persist_temporary_output_async
 
 GPT_IMAGE_2_TEMPORARY_NAME = "gpt_image_2_temporary"
 
@@ -33,7 +33,7 @@ def gpt_image_2_temporary_generate(
     send_background: bool = False,
     send_moderation: bool = False,
     timeout_seconds: float = DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS,
-) -> ImageToolResult:
+) -> ImageToolAsyncResult:
     """执行 gpt_image_2_temporary_generate，用于 preset 基类执行框架 场景下的当前步骤处理。
     
     处理流程：
@@ -69,7 +69,7 @@ def gpt_image_2_temporary_generate(
     response_json = response.json()
     if not isinstance(response_json, dict):
         raise ValueError("temporary provider response is not a JSON object")
-    return persist_temporary_output(
+    return persist_temporary_output_async(
         GPT_IMAGE_2_TEMPORARY_NAME,
         response_json,
         save_path,

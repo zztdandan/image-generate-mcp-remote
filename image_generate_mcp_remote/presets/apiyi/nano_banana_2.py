@@ -5,8 +5,7 @@ from __future__ import annotations
 import httpx
 
 from ...contracts.presets import PresetModeSupport, PresetProvider, PresetRuntimeConfig
-from ...errors import ResponseParseError, UpstreamServiceError
-from ..base import BaseNanoBananaPreset, RETRY_TO_TOTAL_ATTEMPTS_OFFSET
+from ..base import BaseNanoBananaPreset
 from ..models import NanoBananaExecutionRequest, NanoBananaPreparedRequest
 
 
@@ -22,7 +21,7 @@ class ApiYiNanoBanana2Preset(BaseNanoBananaPreset):
     provider = PresetProvider.APIYI
     base_url = "https://api.apiyi.com"
     model = "gemini-3.1-flash-image-preview"
-    runtime = PresetRuntimeConfig(timeout_seconds=200.0, retry_count=1)
+    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=0)
     notes = (
         "API易 Nano Banana 2 uses the Gemini generateContent compatible endpoint.",
         "This preset sends Authorization only and does not require Google-specific x-goog-api-key headers.",
@@ -39,26 +38,15 @@ class ApiYiNanoBanana2Preset(BaseNanoBananaPreset):
 
         处理流程：
             - 步骤 1：按 API易 文档要求组装 generateContent 请求头
-            - 步骤 2：执行重试并返回已校验的 JSON 响应
+            - 步骤 2：只发送一次请求并返回已校验的 JSON 响应
         """
 
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         endpoint = f"{self.resolve().config.base_url.rstrip('/')}/v1beta/models/{self.resolve().config.model}:generateContent"
-        total_attempts = self.resolve().config.runtime.retry_count + RETRY_TO_TOTAL_ATTEMPTS_OFFSET
-        last_error: httpx.RequestError | ResponseParseError | UpstreamServiceError | None = None
-        for attempt in range(1, total_attempts + 1):
-            try:
-                response = httpx.post(
-                    endpoint,
-                    headers=headers,
-                    json=prepared.payload,
-                    timeout=self.resolve().config.runtime.timeout_seconds,
-                )
-                return self.handle_nano_banana_upstream_response(PresetModeSupport(request.mode.value), response)
-            except (httpx.RequestError, ResponseParseError, UpstreamServiceError) as exc:
-                last_error = exc
-                if attempt == total_attempts:
-                    raise
-        if last_error is not None:
-            raise last_error
-        raise ResponseParseError(self.tool_name.value, request.mode.value, "provider request did not return a response")
+        response = httpx.post(
+            endpoint,
+            headers=headers,
+            json=prepared.payload,
+            timeout=self.resolve().config.runtime.timeout_seconds,
+        )
+        return self.handle_nano_banana_upstream_response(PresetModeSupport(request.mode.value), response)

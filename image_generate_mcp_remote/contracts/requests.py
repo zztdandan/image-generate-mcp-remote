@@ -10,7 +10,7 @@ from ..contracts.image_size import ImageAspectRatio, ImageSizeTier
 from ..models.common import ImageToolMode, ToolVersion
 
 DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 180.0
-DEFAULT_TOOL_RETRY_COUNT = 3
+DEFAULT_TOOL_RETRY_COUNT = 0
 
 
 class PromptedImageRequestBase(BaseModel):
@@ -28,7 +28,7 @@ class PromptedImageRequestBase(BaseModel):
     aspect_ratio: ImageAspectRatio = ImageAspectRatio.SQUARE
     image_size: ImageSizeTier = ImageSizeTier.SIZE_1K
     timeout_seconds: float = Field(default=DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS, ge=1.0)
-    retry_count: int = Field(default=DEFAULT_TOOL_RETRY_COUNT, ge=0)
+    retry_count: Literal[0] = DEFAULT_TOOL_RETRY_COUNT
 
 
 class GenerateImageRequestBase(PromptedImageRequestBase):

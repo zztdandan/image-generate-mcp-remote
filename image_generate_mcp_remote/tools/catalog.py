@@ -15,7 +15,7 @@ from ..config import (
     ToolRuntimeConfig,
     get_settings,
 )
-from ..contracts.image_size import SUPPORTED_IMAGE_SIZES, SupportedImageSize
+from ..contracts.image_size import SUPPORTED_IMAGE_SIZES
 from ..contracts.presets import ParameterGuidance, PresetFieldDispatchMode, PresetProtocol, PresetProvider, PresetStability, PresetToolName, ToolKind
 from ..errors import ValidationError
 from ..models.common import ToolCatalogEntry, ToolCatalogResponse, ToolEnvValuesNonSecret, ToolVersion
@@ -44,8 +44,8 @@ def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSec
         output_dir=str(Path(settings.image_output_dir)),
         request_timeout_seconds=runtime_config.effective_timeout_seconds,
         request_timeout_source="preset",
-        retry_count=runtime_config.effective_retry_count,
-        retry_count_source="preset",
+        retry_count=0,
+        retry_count_source="fixed",
     )
 
 
@@ -243,7 +243,7 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
         env_values_non_secret=_non_secret_values(runtime_config),
         notes=[
             "Catalog omits API key values and any masked derivatives.",
-            "Formal tool timeout and retry behavior are owned by the active preset, not by global timeout env vars.",
+            "Formal tool timeout is owned by the active preset; every MCP image request is attempted exactly once with retry_count fixed at 0.",
             *runtime_config.notes,
         ],
     )
