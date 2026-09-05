@@ -18,4 +18,4 @@ class LaoZhangGptImage2SoraOfficialPreset(BaseGptImage2Preset):
     provider = PresetProvider.LAOZHANG
     base_url = "https://api.laozhang.ai/v1"
     notes = ("LaoZhang Sora2Official token group supports official Images API size and quality fields.",)
-    runtime = PresetRuntimeConfig(timeout_seconds=120.0, retry_count=0)
+    runtime = PresetRuntimeConfig(timeout_seconds=150.0, retry_count=0)

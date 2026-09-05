@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .image_size import ImageAspectRatio, ImageSizeTier
 
@@ -125,7 +124,7 @@ class PresetRuntimeConfig(BaseModel):
     """
 
     timeout_seconds: float
-    retry_count: Literal[0] = 0
+    retry_count: int = Field(default=0, ge=0, le=3)
 
 
 class PresetDispatchPolicy(BaseModel):

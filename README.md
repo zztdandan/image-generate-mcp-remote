@@ -14,6 +14,7 @@
 - 提供 `gpt_image_2_temporary` 与 `nano_banana_2_temporary` 临时探索工具，用于陌生兼容站点试跑；成功后应固化为正式 preset
 - 提供 `list_image_tools_catalog` 工具，用于输出当前服务的 default-active preset、尺寸支持、参数指导与非敏感环境变量信息
 - 提供 `skills/gpt-icon-generate/SKILL.md` 图标生成技能，约定规则网格图标板生成、校验和切图流程
+- 提供 `skills/img-gen` 独立生图技能，不依赖 MCP 中间层，直接通过 OS 环境变量读取配置并发起 HTTP 请求，与 MCP 服务端具备同等的 GPT Image 2 / Nano Banana 2 生图与编辑能力
 
 ## 启动期预设（Preset）
 
@@ -330,6 +331,15 @@ Gemini `generateContent` 兼容站点的临时探索工具。
 - 后台解析或落盘失败会写入服务日志；由于 MCP 确认结果已返回，不能回写或改变本次调用结果
 
 ## 内置技能
+
+### `img-gen`
+
+- 技能文件：`skills/img-gen/SKILL.md`
+- 用途：直接图像生成/编辑，不依赖 MCP 中间层
+- 能力：与 MCP 服务端的 `gpt_image_2_official` / `nano_banana_2_official` 同等覆盖 13 个 preset（GPT Image 2 × 10、Nano Banana 2 × 3），支持文生图与参考图编辑
+- 配置：纯 OS 环境变量驱动，不读取任何 .env 文件，不绑定特定 profile 路径；所需变量与 MCP 服务端一致（`IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY`、`IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY` 等）
+- 检测：`python3 scripts/check_env.py` 报告各渠道可用状态与缺省配置，供大模型直接读取判断当前哪个渠道可用
+- 适用场景：当 MCP 服务不可用或不需要 MCP 中间层时，直接在终端或 Agent 会话中生图
 
 ### `gpt-icon-generate`
 

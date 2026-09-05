@@ -239,7 +239,7 @@ def test_nano_generate_supports_laozhang_pro_preset_override(monkeypatch, tmp_pa
         "Content-Type": "application/json",
     }
     assert captured["json"]["generationConfig"]["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "4K"}
-    assert captured["timeout"] == 300
+    assert captured["timeout"] == 150
     assert result.provider_model == "gemini-3-pro-image-preview"
     assert result.save_path.endswith("laozhang-pro-override-call.png")
 

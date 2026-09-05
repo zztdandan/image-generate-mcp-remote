@@ -39,6 +39,7 @@ from .models import GptImage2EditExecutionRequest, GptImage2ExecutionRequest, Gp
 
 PRESET_DEFAULT_IMAGE_HTTP_TIMEOUT_SECONDS = 120.0
 PRESET_DEFAULT_TOOL_RETRY_COUNT = 0
+RETRYABLE_HTTP_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 GPT_IMAGE_GENERATIONS_PATH = "/images/generations"
 GPT_IMAGE_EDITS_PATH = "/images/edits"
 GPT_IMAGE_RESPONSE_EXCERPT_LIMIT = 400
@@ -218,6 +219,55 @@ class BaseImageToolPreset:
             is_consistent=actual_width == expected_size.width and actual_height == expected_size.height,
         )
 
+    def post_with_retry(
+        self,
+        endpoint: str,
+        headers: dict[str, str],
+        *,
+        json: dict[str, object] | None = None,
+        data: dict[str, str] | None = None,
+        files: list[tuple[str, tuple[str, bytes, str]]] | None = None,
+    ) -> httpx.Response:
+        """Send a generation request, retrying only transient transport/status failures."""
+        runtime = self.resolve().config.runtime
+        attempts = runtime.retry_count + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                if json is not None:
+                    response = httpx.post(endpoint, headers=headers, json=json, timeout=runtime.timeout_seconds)
+                elif data is not None:
+                    response = httpx.post(
+                        endpoint,
+                        headers=headers,
+                        data=data,
+                        files=files,
+                        timeout=runtime.timeout_seconds,
+                    )
+                else:
+                    response = httpx.post(endpoint, headers=headers, timeout=runtime.timeout_seconds)
+            except httpx.RequestError:
+                if attempt == attempts:
+                    raise
+                logger.warning(
+                    "Retrying transient image request after transport failure: preset=%s attempt=%d/%d",
+                    self.resolve().config.preset_id,
+                    attempt + 1,
+                    attempts,
+                    exc_info=True,
+                )
+                continue
+            if response.status_code in RETRYABLE_HTTP_STATUS_CODES and attempt < attempts:
+                logger.warning(
+                    "Retrying transient image response: preset=%s status_code=%d attempt=%d/%d",
+                    self.resolve().config.preset_id,
+                    response.status_code,
+                    attempt + 1,
+                    attempts,
+                )
+                continue
+            return response
+        raise RuntimeError("image request retry loop exhausted unexpectedly")
+
 
 class BaseGptImage2Preset(BaseImageToolPreset):
     """BaseGptImage2Preset 是 preset 契约定义 的结构模型，作用范围为本模块数据边界与调用契约。
@@ -343,12 +393,7 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         return f"{prompt}\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}"
 
     def send_gpt_image_2_request(self, request: GptImage2ExecutionRequest, prepared: GptImage2PreparedRequest, api_key: str) -> dict[str, object]:
-        """执行 send_gpt_image_2_request，用于 preset 契约定义 场景下的当前步骤处理。
-        
-        处理流程：
-            - 步骤 1：只发送一次上游请求并收集响应内容
-            - 步骤 2：任意网络、协议或上游错误立即返回失败
-        """
+        """Send the GPT-compatible request using the active preset retry policy."""
 
         headers = {"Authorization": f"Bearer {api_key}"}
         mode = PresetModeSupport(request.mode.value)
@@ -356,20 +401,26 @@ class BaseGptImage2Preset(BaseImageToolPreset):
         endpoint = self.endpoint_for_path(path)
         attempt_start = time.perf_counter()
         logger.info(
-            "[_TIMING] send_gpt_image_2_request ATTEMPT 1/1 preset=%s endpoint=%s timeout_seconds=%.1f payload_keys=%s has_files=%s t=%.6f",
+            "[_TIMING] send_gpt_image_2_request START preset=%s endpoint=%s timeout_seconds=%.1f retry_count=%d payload_keys=%s has_files=%s t=%.6f",
             self.resolve().config.preset_id,
             endpoint,
             self.resolve().config.runtime.timeout_seconds,
+            self.resolve().config.runtime.retry_count,
             sorted(prepared.payload.keys()),
             bool(prepared.files),
             attempt_start,
         )
         if mode is PresetModeSupport.EDIT:
-            response = httpx.post(endpoint, headers=headers, data={key: str(value) for key, value in prepared.payload.items()}, files=prepared.files, timeout=self.resolve().config.runtime.timeout_seconds)
+            response = self.post_with_retry(
+                endpoint,
+                headers,
+                data={key: str(value) for key, value in prepared.payload.items()},
+                files=prepared.files,
+            )
         else:
-            response = httpx.post(endpoint, headers=headers, json=prepared.payload, timeout=self.resolve().config.runtime.timeout_seconds)
+            response = self.post_with_retry(endpoint, headers, json=prepared.payload)
         logger.info(
-            "[_TIMING] send_gpt_image_2_request ATTEMPT_OK 1/1 preset=%s status_code=%d elapsed_ms=%.1f",
+            "[_TIMING] send_gpt_image_2_request DONE preset=%s status_code=%d elapsed_ms=%.1f",
             self.resolve().config.preset_id,
             response.status_code,
             (time.perf_counter() - attempt_start) * 1000,
@@ -632,7 +683,7 @@ class BaseNanoBananaPreset(BaseImageToolPreset):
     def send_nano_banana_request(self, request: NanoBananaExecutionRequest, prepared: NanoBananaPreparedRequest, api_key: str) -> dict[str, object]:
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "x-goog-api-key": api_key}
         endpoint = f"{self.resolve().config.base_url.rstrip('/')}/v1beta/models/{self.resolve().config.model}:generateContent"
-        response = httpx.post(endpoint, headers=headers, json=prepared.payload, timeout=self.resolve().config.runtime.timeout_seconds)
+        response = self.post_with_retry(endpoint, headers, json=prepared.payload)
         return self.handle_nano_banana_upstream_response(PresetModeSupport(request.mode.value), response)
 
     def describe_nano_banana_response(

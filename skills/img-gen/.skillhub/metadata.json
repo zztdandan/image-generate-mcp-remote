@@ -1,0 +1,8 @@
+{
+  "registry": "http://172.16.13.25:8081",
+  "namespace": "global",
+  "slug": "img-gen",
+  "version": "2.0.0",
+  "agent": "custom",
+  "installedAt": "2026-08-05T08:05:06.185Z"
+}

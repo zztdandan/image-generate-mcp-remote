@@ -18,4 +18,4 @@ class LaoZhangGptImage2EnterprisePreset(BaseGptImage2Preset):
     provider = PresetProvider.LAOZHANG
     base_url = "https://api.laozhang.ai/v1"
     notes = ("LaoZhang GPTImage2 Enterprise group is a pure official-key route with official parameter support.",)
-    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=0)
+    runtime = PresetRuntimeConfig(timeout_seconds=150.0, retry_count=0)

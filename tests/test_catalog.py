@@ -24,9 +24,16 @@ def test_catalog_reports_defaults_and_env_overrides(monkeypatch, tmp_path: Path)
     assert gpt_entry.env_values_non_secret.request_timeout_seconds == 120
     assert gpt_entry.env_values_non_secret.request_timeout_source == "preset"
     assert gpt_entry.env_values_non_secret.retry_count == 0
-    assert gpt_entry.env_values_non_secret.retry_count_source == "fixed"
+    assert gpt_entry.env_values_non_secret.retry_count_source == "preset"
     assert "1K + 1:1 (gpt=1280x1280)" in gpt_entry.supported_size_presets
     assert gpt_entry.api_key_configured is True
+
+    monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_PRESET", "laozhang_gpt_image_2_vip")
+    get_settings.cache_clear()
+    vip_entry = next(tool for tool in list_image_tools_catalog(ToolVersion.V1).tools if tool.tool_name == "gpt_image_2_official")
+    assert vip_entry.env_values_non_secret.request_timeout_seconds == 150
+    assert vip_entry.env_values_non_secret.retry_count == 1
+    assert vip_entry.env_values_non_secret.retry_count_source == "preset"
 
     nano_entry = next(tool for tool in result.tools if tool.tool_name == "nano_banana_2_official")
     assert nano_entry.active_preset_id == "google_nano_banana"

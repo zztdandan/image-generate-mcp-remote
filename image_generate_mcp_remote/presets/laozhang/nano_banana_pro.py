@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import httpx
-
 from ...contracts.presets import PresetModeSupport, PresetProvider, PresetRuntimeConfig
 from ..base import BaseNanoBananaPreset
 from ..models import NanoBananaExecutionRequest, NanoBananaPreparedRequest
@@ -21,7 +19,7 @@ class LaoZhangNanoBananaProPreset(BaseNanoBananaPreset):
     provider = PresetProvider.LAOZHANG
     base_url = "https://api.laozhang.ai"
     model = "gemini-3-pro-image-preview"
-    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=0)
+    runtime = PresetRuntimeConfig(timeout_seconds=150.0, retry_count=1)
     notes = (
         "LaoZhang Nano Banana Pro maps to gemini-3-pro-image-preview over the Gemini generateContent endpoint.",
         "Archived provider docs show this route uses Authorization only and does not require x-goog-api-key headers.",
@@ -35,19 +33,9 @@ class LaoZhangNanoBananaProPreset(BaseNanoBananaPreset):
         prepared: NanoBananaPreparedRequest,
         api_key: str,
     ) -> dict[str, object]:
-        """执行 send_nano_banana_request，用于 preset 契约定义 场景下的当前步骤处理。
-
-        处理流程：
-            - 步骤 1：按老张 Gemini 兼容文档组装 generateContent 请求头
-            - 步骤 2：只发送一次请求并返回已校验的 JSON 响应
-        """
+        """Send a LaoZhang Gemini-compatible request with preset retry behavior."""
 
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         endpoint = f"{self.resolve().config.base_url.rstrip('/')}/v1beta/models/{self.resolve().config.model}:generateContent"
-        response = httpx.post(
-            endpoint,
-            headers=headers,
-            json=prepared.payload,
-            timeout=self.resolve().config.runtime.timeout_seconds,
-        )
+        response = self.post_with_retry(endpoint, headers, json=prepared.payload)
         return self.handle_nano_banana_upstream_response(PresetModeSupport(request.mode.value), response)

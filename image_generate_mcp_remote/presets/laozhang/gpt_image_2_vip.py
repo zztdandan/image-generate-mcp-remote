@@ -27,7 +27,7 @@ class LaoZhangGptImage2VipPreset(BaseGptImage2Preset):
         background=PresetFieldDispatchMode.SEND,
         moderation=PresetFieldDispatchMode.SEND,
     )
-    runtime = PresetRuntimeConfig(timeout_seconds=300.0, retry_count=0)
+    runtime = PresetRuntimeConfig(timeout_seconds=150.0, retry_count=1)
     unsupported_sizes: tuple[UnsupportedSizePreset, ...] = tuple(
         UnsupportedSizePreset(image_size=ImageSizeTier.SIZE_4K, aspect_ratio=aspect_ratio)
         for aspect_ratio in ImageAspectRatio

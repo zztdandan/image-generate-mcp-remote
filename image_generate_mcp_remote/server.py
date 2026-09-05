@@ -101,7 +101,7 @@ def list_image_presets_tool(version: ToolVersion) -> dict[str, object]:
     title="GPT Image 2 Official",
     description=(
         "Generate or edit images via the OpenAI Images compatible gateway. "
-        "The active startup preset owns provider, model, timeout, and field dispatch behavior; every request is attempted exactly once. "
+        "The active startup preset owns provider, model, timeout, retry policy, and field dispatch behavior. "
         "You may override preset and api_key per call; if preset is supplied, api_key is required in the same request. "
         "Without overrides, the configured preset and API key are used. "
         "Select image_size plus aspect_ratio from the catalog enums to derive the provider size preset. "
@@ -173,7 +173,7 @@ def gpt_image_2_official(
     title="Nano Banana 2 Official",
     description=(
         "Generate or edit images via the Gemini compatible gateway. "
-        "The active startup preset owns provider, model, timeout, and field dispatch behavior; every request is attempted exactly once. "
+        "The active startup preset owns provider, model, timeout, retry policy, and field dispatch behavior. "
         "You may override preset and api_key per call; if preset is supplied, api_key is required in the same request. "
         "Without overrides, the configured preset and API key are used. "
         "Use image_size plus aspect_ratio from the shared catalog enums. "

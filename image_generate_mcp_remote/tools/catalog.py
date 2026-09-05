@@ -44,8 +44,8 @@ def _non_secret_values(runtime_config: ToolRuntimeConfig) -> ToolEnvValuesNonSec
         output_dir=str(Path(settings.image_output_dir)),
         request_timeout_seconds=runtime_config.effective_timeout_seconds,
         request_timeout_source="preset",
-        retry_count=0,
-        retry_count_source="fixed",
+        retry_count=runtime_config.effective_retry_count,
+        retry_count_source="preset",
     )
 
 
@@ -243,7 +243,7 @@ def _entry_for(runtime_config: ToolRuntimeConfig) -> ToolCatalogEntry:
         env_values_non_secret=_non_secret_values(runtime_config),
         notes=[
             "Catalog omits API key values and any masked derivatives.",
-            "Formal tool timeout is owned by the active preset; every MCP image request is attempted exactly once with retry_count fixed at 0.",
+            "Formal tool timeout and retry count are owned by the active preset; only transient transport and retryable HTTP status failures are retried.",
             *runtime_config.notes,
         ],
     )

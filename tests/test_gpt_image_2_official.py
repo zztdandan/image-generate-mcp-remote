@@ -174,7 +174,7 @@ def test_gpt_generate_supports_per_call_preset_and_api_key_override(monkeypatch,
 
     assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
-    assert captured["timeout"] == 120
+    assert captured["timeout"] == 150
     assert "Target image size: 1280x720." in captured["json"]["prompt"]
     assert captured["json"]["prompt"].endswith(GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX)
     assert result.save_path.endswith("override-per-call.png")
@@ -293,11 +293,15 @@ def test_gpt_url_persistence_does_not_block_acknowledgement(monkeypatch, tmp_pat
     assert save_path.exists()
 
 
-def test_gpt_generate_vip_preset_sends_minimal_payload(monkeypatch, tmp_path: Path):
+def test_gpt_generate_vip_preset_retries_transport_failure_and_sends_minimal_payload(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY", "env-secret-key")
     captured: dict[str, object] = {}
+    calls = {"post": 0}
 
     def fake_post(url: str, headers: dict[str, str], json: dict[str, object], timeout: float):
+        calls["post"] += 1
+        if calls["post"] == 1:
+            raise httpx.ReadTimeout("transient upstream timeout")
         captured["url"] = url
         captured["headers"] = headers
         captured["json"] = json
@@ -321,7 +325,8 @@ def test_gpt_generate_vip_preset_sends_minimal_payload(monkeypatch, tmp_path: Pa
 
     assert captured["url"] == "https://api.laozhang.ai/v1/images/generations"
     assert captured["headers"] == {"Authorization": "Bearer request-secret-key"}
-    assert captured["timeout"] == 300
+    assert captured["timeout"] == 150
+    assert calls["post"] == 2
     assert captured["json"] == {
         "prompt": f"draw a lantern\n{GPT_FRAGMENT_REDUCTION_PROMPT_SUFFIX}",
         "model": "gpt-image-2-vip",
@@ -506,11 +511,11 @@ def test_gpt_generate_does_not_retry_after_request_error(monkeypatch, tmp_path: 
     assert calls["post"] == 1
 
 
-def test_laozhang_vip_preset_keeps_timeout_and_disables_retry():
+def test_laozhang_vip_preset_keeps_timeout_and_enables_one_retry():
     resolved = resolve_preset_for_tool(PresetToolName.GPT_IMAGE_2_OFFICIAL, "laozhang_gpt_image_2_vip").resolve()
 
-    assert resolved.config.runtime.timeout_seconds == 300
-    assert resolved.config.runtime.retry_count == 0
+    assert resolved.config.runtime.timeout_seconds == 150
+    assert resolved.config.runtime.retry_count == 1
 
 
 def test_right_codes_presets_keep_timeouts_and_disable_retry():
