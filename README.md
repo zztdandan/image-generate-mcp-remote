@@ -338,7 +338,7 @@ Gemini `generateContent` 兼容站点的临时探索工具。
 - 版本：`2.3.1`（与 DSH 侧 `v2.3.0` 内容对齐，配置层改为纯环境变量）
 - 用途：直接图像生成/编辑，不依赖 MCP 中间层
 - 能力：23 个 preset（GPT Image 2 / 2.5 × 20、Nano Banana 2 × 3），`--preset auto` 计费路由默认只走 $0.03/张的 `-vip` 路线，同价线路互为备份，按 token 计费的官转 preset 仅在 `--allow-expensive` 或显式指定时进入；`-vip` preset 按 apiyi 30 档尺寸表校验尺寸，`quality` 按模型族校验
-- 配置：只读**进程环境变量**，不读取 `.env` 文件、不绑定 profile 路径；变量由宿主在启动时注入（DSH 启动前注入，技能运行在派生子进程里继承）。所需变量与 MCP 服务端一致（`IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY`、`IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY` 等）
+- 配置：只读**进程环境变量**，技能自身不读取 `.env` 文件、不绑定 profile 路径；变量由宿主提供——DSH 启动时按「继承的进程环境 > 工作目录 `.env` > `~/.dsh/.env`」分层加载并物化进 `process.env`（同名环境变量优先，文件不覆盖），技能运行在派生子进程里继承。所需变量与 MCP 服务端一致（`IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY`、`IMG_GEN_NANO_BANANA_2_OFFICIAL_API_KEY` 等）
 - 检测：`python3 scripts/check_env.py`（或 `img_gen.py check`）打印各渠道状态、auto 链路与已配置 preset；**缺 key 时退出码 1 并列出缺失变量**，SKILL.md 要求此时停下并提醒用户设置，不得猜测或回退到文件读取
 - 适用场景：当 MCP 服务不可用或不需要 MCP 中间层时，直接在终端或 Agent 会话中生图
 

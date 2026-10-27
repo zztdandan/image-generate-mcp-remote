@@ -195,7 +195,7 @@ python3 scripts/presets/banana/laozhang_nano_banana_pro.py generate --prompt "..
 ## 环境配置
 
 技能只读**进程环境变量**，不读 `.env` 文件，也不绑定任何 profile 路径。
-变量必须在启动宿主（DSH / shell / systemd / CI）时注入：
+变量由宿主在启动时提供：
 
 ```bash
 export IMG_GEN_GPT_IMAGE_2_OFFICIAL_API_KEY=<token>
@@ -205,8 +205,11 @@ export IMG_GEN_NANO_BANANA_2_OFFICIAL_PRESET=apiyi_nano_banana_2
 export IMAGE_OUTPUT_DIR=<绝对路径>      # 可选，默认 ~/images
 ```
 
-- **DSH**：变量在 `dsh` 进程启动前注入（wrapper / systemd / `set -a; source <secrets>; set +a`
-  再启动）。技能运行在宿主派生的子进程里，继承同一套变量。
+- **DSH**：把这些变量写进 Harness home 的 `~/.dsh/.env`（或调用 `dsh` 时所在目录的 `.env`）。
+  dsh 启动时按「继承的进程环境 > 工作目录 `.env` > `~/.dsh/.env`」分层加载，并物化进
+  `process.env`，会话里派生的 shell / 脚本直接继承。已存在的同名环境变量优先，文件不覆盖它；
+  `DSH_*` / `XDG_*` 等启动期变量不允许写进文件，会被启动期校验拒绝并报错。
+- **其它宿主**：`systemd` 环境、CI 变量或 `set -a; source <secrets>; set +a` 后启动宿主，效果相同。
 - **一次性会话**：`export` 后在同一 shell 里调用脚本即可。
 - 只确认变量非空：空字符串等同未设置（防止 `export VAR=` 伪装成已配置）。
 - **安全说明**：技能不打印 token 值、不把变量写回磁盘；凭据只以环境变量形式存在于进程内。
