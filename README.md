@@ -1,3 +1,10 @@
+> ## ⚠️ 仓库已归档（Deprecated）
+>
+> 本仓库已停止维护，MCP 服务端路线废弃。
+> 后续版本迁移到 **[zztdandan/image-generate-skill](https://github.com/zztdandan/image-generate-skill)**：
+> 只保留两个可直接被 Agent 宿主加载的技能（`img-gen`、`gpt-icon-generate`），不再提供服务端与 MCP 配置。
+> 安装与迁移说明见新仓库 README / CHANGELOG v2.3.0。
+
 # image-generate-mcp-remote
 
 一个基于 UV + Python 的远程 MCP 图片生成服务，统一封装 OpenAI Images 兼容接口与 Gemini `generateContent` 生图接口。
