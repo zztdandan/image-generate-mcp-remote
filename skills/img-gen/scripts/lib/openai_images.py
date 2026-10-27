@@ -3,6 +3,13 @@
 Protocol: POST {base_url}/images/generations  (generate)
           POST {base_url}/images/edits        (edit, multipart)
 Auth:     Authorization: Bearer {api_key}
+
+Notes baked in from the apiyi docs (2026-10):
+  * the image endpoints are synchronous — there is no task id. A client-side
+    disconnect still gets billed, so the default timeout is 360 s.
+  * `response_format` is always sent explicitly (`b64_json` default) because
+    the historical default flipped between url and b64_json per group/load.
+  * `data[]` entries carry either `url` or `b64_json`; both are handled.
 """
 
 from __future__ import annotations
@@ -13,16 +20,23 @@ import time
 from pathlib import Path
 from urllib import request, error as urllib_error
 
+DEFAULT_TIMEOUT = 360.0
+
 
 def _api_request(
     url: str,
     headers: dict,
     data: bytes | None = None,
-    timeout: float = 150.0,
+    timeout: float = DEFAULT_TIMEOUT,
     retries: int = 1,
 ) -> dict:
-    """Send HTTP request with retry on transient errors."""
-    last_exc = None
+    """Send an HTTP request with retry on transient errors.
+
+    5xx and saturation-style 429s are retried with exponential backoff.
+    Quota 403s and parameter 400s are raised immediately: retrying them only
+    burns time (and, on image endpoints, money).
+    """
+    last_exc: Exception | None = None
     for attempt in range(retries + 1):
         try:
             req = request.Request(url, data=data, headers=headers)
@@ -30,13 +44,18 @@ def _api_request(
                 return json.loads(resp.read().decode("utf-8"))
         except urllib_error.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")
-            if e.code and 500 <= e.code < 600 and attempt < retries:
+            retryable = e.code >= 500
+            if e.code == 429 and "饱和" in body:
+                retryable = True
+            if retryable and attempt < retries:
                 time.sleep(2 ** attempt)
+                last_exc = RuntimeError(f"HTTP {e.code}: {body}")
                 continue
-            last_exc = RuntimeError(f"HTTP {e.code}: {body}")
+            raise RuntimeError(f"HTTP {e.code}: {body}") from None
         except Exception as e:
             if attempt < retries:
                 time.sleep(2 ** attempt)
+                last_exc = e
                 continue
             last_exc = e
     raise last_exc or RuntimeError("request failed")
@@ -49,15 +68,45 @@ def generate(
     size: str = "1024x1024",
     n: int = 1,
     response_format: str = "b64_json",
+    model: str | None = None,
+    quality: str | None = None,
+    background: str | None = None,
+    output_format: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict:
-    """Call POST /images/generations, return parsed JSON response."""
+    """Call POST /images/generations, return parsed JSON response.
+
+    `model` MUST be sent: relay gateways default to dall-e-2 when it is
+    omitted and then reject the request with "no available channels for
+    model dall-e-2".
+
+    `n` is deliberately kept at 1: the -vip models bill `n=3` as three
+    images but still return one, so the CLI never sends more than 1.
+
+    `quality` is optional and ONLY sent when non-empty. GPT-image-2.5 accepts
+    low/medium/high/xhigh/max/auto; gpt-image-2 accepts low/medium/high/auto.
+    Do NOT send an empty quality string — upstream 400s on unsupported values.
+
+    `background` ("transparent" | "opaque" | "auto") and `output_format`
+    ("png" | "webp" | "jpeg") are optional and only sent when set. GPT-image-2.5
+    honours background="transparent" with output_format="png" and returns a real
+    alpha channel; gpt-image-2 may ignore it.
+    """
     url = f"{base_url.rstrip('/')}/images/generations"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     body = {"prompt": prompt, "size": size, "n": n, "response_format": response_format}
-    return _api_request(url, headers, json.dumps(body).encode("utf-8"))
+    if model:
+        body["model"] = model
+    if quality:
+        body["quality"] = quality
+    if background:
+        body["background"] = background
+    if output_format:
+        body["output_format"] = output_format
+    return _api_request(url, headers, json.dumps(body).encode("utf-8"), timeout=timeout)
 
 
 def edit(
@@ -66,11 +115,35 @@ def edit(
     image_path: str,
     prompt: str,
     mask_path: str | None = None,
-    size: str = "1024x1024",
+    size: str | None = None,
     n: int = 1,
     response_format: str = "b64_json",
+    model: str | None = None,
+    quality: str | None = None,
+    background: str | None = None,
+    output_format: str | None = None,
+    input_fidelity: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict:
-    """Call POST /images/edits (multipart), return parsed JSON response."""
+    """Call POST /images/edits (multipart), return parsed JSON response.
+
+    `model` MUST be sent: relay gateways fall back to dall-e-2 when it is
+    omitted and reject the request with "no available channels for model
+    dall-e-2".
+
+    `size` is optional: omit (None) to let the gateway keep the input image size.
+    Some gates reject sizes they don't support, so only send when explicitly
+    provided. On the -vip table30 presets, always pass an explicit slot when a
+    2K result is required: apiyi otherwise falls back to a ~1120 px long edge.
+
+    `quality` is optional and ONLY sent when non-empty (same rule as generate:
+    gpt-image-2.5 accepts low/medium/high/xhigh/max/auto). Do NOT send an empty
+    quality string — upstream 400s on unsupported values.
+
+    `background` / `output_format` mirror generate(); `input_fidelity` exists
+    for API compatibility but the apiyi docs say not to send it, so it is
+    omitted unless explicitly provided.
+    """
     import mimetypes
 
     url = f"{base_url.rstrip('/')}/images/edits"
@@ -90,56 +163,75 @@ def edit(
             + b"\r\n"
         )
 
-    parts.append(
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="prompt"\r\n\r\n'
-        f"{prompt}\r\n".encode("utf-8")
-    )
-    parts.append(
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="size"\r\n\r\n'
-        f"{size}\r\n".encode("utf-8")
-    )
-    parts.append(
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="n"\r\n\r\n'
-        f"{n}\r\n".encode("utf-8")
-    )
-    parts.append(
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="response_format"\r\n\r\n'
-        f"{response_format}\r\n".encode("utf-8")
-    )
+    def add_text(name: str, value: str) -> None:
+        parts.append(
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n".encode("utf-8")
+        )
+
+    add_text("prompt", prompt)
+    if model:
+        add_text("model", model)
+    if size:
+        add_text("size", size)
+    if quality:
+        add_text("quality", quality)
+    if background:
+        add_text("background", background)
+    if output_format:
+        add_text("output_format", output_format)
+    if input_fidelity:
+        add_text("input_fidelity", input_fidelity)
+    add_text("n", str(n))
+    add_text("response_format", response_format)
     parts.append(f"--{boundary}--\r\n".encode("utf-8"))
 
-    body = b"\r\n".join(parts) if False else b"".join(parts)  # noqa
-    # Re-assemble cleanly
     body = b"".join(parts)
 
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": f"multipart/form-data; boundary={boundary}",
     }
-    return _api_request(url, headers, body)
+    return _api_request(url, headers, body, timeout=timeout)
+
+
+def _download(url: str, out: Path, timeout: float = 120.0) -> None:
+    """Fetch a url-form image immediately (those links expire in ~24 h)."""
+    req = request.Request(url, headers={"User-Agent": "img-gen/2.3"})
+    with request.urlopen(req, timeout=timeout) as resp:
+        out.write_bytes(resp.read())
 
 
 def save_image(response: dict, save_path: str) -> list[str]:
-    """Extract base64 images from response and save to disk.
+    """Extract images from the response and save them to disk.
 
-    Returns list of saved file paths.
+    Handles both `b64_json` (optionally with a `data:` prefix — historical
+    relay versions differed) and `url` (downloaded right away, since CDN
+    links expire ~24 h). Returns the list of saved file paths, and also
+    attaches `_saved` to the response for callers that want the paths.
     """
-    data_list = response.get("data", [])
-    saved = []
+    data_list = response.get("data", []) or []
+    saved: list[str] = []
     for idx, item in enumerate(data_list):
-        b64_str = item.get("b64_json", "")
-        if not b64_str:
-            continue
-        raw = base64.b64decode(b64_str)
         out = Path(save_path)
         if len(data_list) > 1:
             stem, suf = out.stem, out.suffix
             out = out.with_name(f"{stem}_{idx}{suf}")
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(raw)
-        saved.append(str(out))
+
+        b64_str = item.get("b64_json") or ""
+        if b64_str:
+            if b64_str.startswith("data:"):
+                b64_str = b64_str.split(",", 1)[1]
+            out.write_bytes(base64.b64decode(b64_str))
+            saved.append(str(out))
+            continue
+
+        url = item.get("url") or ""
+        if url:
+            _download(url, out)
+            saved.append(str(out))
+
+    response["_saved"] = saved
     return saved
